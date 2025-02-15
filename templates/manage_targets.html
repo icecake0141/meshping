@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>監視対象リスト管理</title>
+</head>
+<body>
+  <h1>監視対象リスト管理</h1>
+  <form action="{{ url_for('update_targets_list') }}" method="post">
+    <label for="targets">監視対象IP (カンマ区切りで入力):</label><br>
+    <input type="text" id="targets" name="targets" value="{{ ', '.join(current_targets) }}" size="100"><br><br>
+    <input type="submit" value="更新">
+  </form>
+</body>
+</html>
