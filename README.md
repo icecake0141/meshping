@@ -143,4 +143,7 @@ This completes the TLS configuration using a self-signed certificate, enabling H
 
 ## License
 
-Please specify license information for this project (e.g., MIT License).
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+**Note on LLM-Generated Code:** This codebase was developed with the assistance of Large Language Models (LLMs). 
+See the [NOTICE](NOTICE) file for more information about the use of AI-assisted code generation in this project.
