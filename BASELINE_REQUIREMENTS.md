@@ -16,7 +16,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 
 ### 1. Agent Registration & Authentication
 **Status:** ✅ Implemented  
-**Source Files:** `server.py` (lines 174-220), `agent.go` (lines 187-218)
+**Source Files:** `server.py` (lines 174-220, handshake handler), `agent.go` (lines 196-218, handshake logic)
 
 - **Passphrase-based authentication**: Agents use a server-issued passphrase for initial handshake
 - **Provisional registration**: New agents are placed in "pending" status awaiting admin approval
@@ -51,7 +51,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 - **Concurrent monitoring**: Parallel execution for multiple targets
 - **RTT measurement**: Records round-trip time for successful pings
 - **Result states**: Binary ok/fail status with latency information
-- **Timeout handling**: 3-second timeout for ICMP requests (line 22)
+- **Timeout handling**: 3-second timeout for ICMP requests (`agent.go` line 22)
 
 ### 5. Data Storage & Caching
 **Status:** ✅ Implemented  
@@ -148,7 +148,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 - 1-hour cache implemented and working (old data automatically removed from cache)
 - Data is written to SQLite but never deleted
 - No 24-hour retention policy enforcement (database will grow indefinitely)
-- Specification indicates 24-hour retention should be implemented, with future plans for configurability
+- Specification describes intended behavior as 24-hour retention, not confirmed as implemented
 
 ### 5. Agent Local Buffer Details
 **Status:** ⚠️ Partially Implemented  
