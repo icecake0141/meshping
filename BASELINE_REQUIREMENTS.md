@@ -16,7 +16,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 
 ### 1. Agent Registration & Authentication
 **Status:** ✅ Implemented  
-**Source Files:** `server.py` (lines 167-220), `agent.go` (lines 187-218)
+**Source Files:** `server.py` (lines 174-220), `agent.go` (lines 187-218)
 
 - **Passphrase-based authentication**: Agents use a server-issued passphrase for initial handshake
 - **Provisional registration**: New agents are placed in "pending" status awaiting admin approval
@@ -26,7 +26,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 
 ### 2. WebSocket Communication
 **Status:** ✅ Implemented  
-**Source Files:** `server.py` (lines 14, 22, 167-262), `agent.go` (lines 12, 189-244)
+**Source Files:** `server.py` (lines 22, 167-262), `agent.go` (lines 189-244)
 
 - **Bi-directional communication**: Server and agents communicate via WebSocket
 - **Namespace separation**: Uses `/agent` namespace for agent connections
@@ -35,7 +35,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 
 ### 3. Monitoring Target Management
 **Status:** ✅ Implemented  
-**Source Files:** `server.py` (lines 25, 117-163), `agent.go` (lines 28-32, 220-244)
+**Source Files:** `server.py` (lines 117-163), `agent.go` (lines 220-244)
 
 - **Centralized target list**: Server maintains single source of truth for monitoring targets
 - **Push distribution**: Target list updates are pushed to all connected agents in real-time
@@ -137,7 +137,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 
 ### 4. Data Retention Policy
 **Status:** ⚠️ Partially Implemented  
-**Specification:** `specs.txt` (line 34)
+**Specification:** `specs.txt` (lines 30-34)
 
 **Missing Features:**
 - Automatic cleanup of data older than 24 hours
@@ -239,7 +239,6 @@ Based on gap analysis, recommended implementation priorities:
 ## 📝 Notes
 
 - This document should be updated whenever features are added or removed
-- Version information: Server and agent both at v1.0.0 baseline
 - Testing coverage: Basic tests exist in `tests/` directory but coverage is incomplete
 - Production readiness: Current implementation is PoC quality; security review required before production use
 
