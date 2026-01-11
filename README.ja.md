@@ -124,7 +124,7 @@ Meshping は TLS 経由で WebSocket (WSS) および HTTPS 通信を行います
    - `cert.pem` と `key.pem` がプロジェクトのルートに生成されます。
 
 ### サーバの起動時の TLS 設定
-- [server.py](http://_vscodecontentref_/0) の [if __name__ == '__main__':](http://_vscodecontentref_/1) 部分で、次のように証明書と秘密鍵を読み込む設定になっています。
+- `server.py` の `if __name__ == '__main__':` 部分で、次のように証明書と秘密鍵を読み込む設定になっています。
 
     ```python
     if __name__ == '__main__':
