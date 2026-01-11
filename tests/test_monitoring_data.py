@@ -1,6 +1,6 @@
 """Integration-style tests for monitoring data retrieval."""
 
-# pylint: disable=import-error
+# pylint: disable=import-error,duplicate-code
 import datetime
 
 import pytest
