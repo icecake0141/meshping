@@ -83,9 +83,12 @@ def reject_agent(agent_db_id):
 @app.route('/admin/update_targets', methods=['POST'])
 def update_targets():
     global current_targets
-    new_targets = request.json.get('targets')
-    if new_targets is None:
+    payload = request.get_json(silent=True)
+    if payload is None or 'targets' not in payload:
         return jsonify({'error': 'No targets provided'}), 400
+    new_targets = payload.get('targets')
+    if not isinstance(new_targets, list) or not all(isinstance(target, str) for target in new_targets):
+        return jsonify({'error': 'Targets must be a list of strings'}), 400
     current_targets = new_targets
     socketio.emit('server_message', {'type': 'update_targets', 'targets': current_targets},
                   namespace='/agent')
