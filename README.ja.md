@@ -151,5 +151,9 @@ Meshping は TLS 経由で WebSocket (WSS) および HTTPS 通信を行います
 
 本プロジェクトは Apache License 2.0 のもとでライセンスされています。詳細は [LICENSE](LICENSE) ファイルをご覧ください。
 
-**LLM生成コードに関する注意:** このコードベースは Large Language Models (LLMs) の支援を受けて開発されました。
-AIを活用したコード生成の使用に関する詳細は [NOTICE](NOTICE) ファイルをご覧ください。
+## LLM生成コードに関する注意
+
+このコードベースは Large Language Models (LLMs) の支援を受けて開発されました。
+AIを活用したコード生成の使用に関する詳細については、以下をご参照ください：
+- [LLM_NOTICE.md](LLM_NOTICE.md) - LLM生成コードに関する詳細な通知（日本語/英語）
+- [NOTICE](NOTICE) - 一般的な帰属表示
