@@ -50,6 +50,7 @@ def test_update_targets_without_targets_field_returns_400(test_client):
 
 def test_update_targets_with_targets_returns_200_and_targets(test_client):
     """Test that valid targets list returns 200 with target data."""
+
     payload = {"targets": ["10.0.0.1", "10.0.0.2"]}
 
     response = test_client.post("/admin/update_targets", json=payload)
