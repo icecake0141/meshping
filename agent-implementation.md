@@ -39,7 +39,7 @@ func main() {
     defer ws.Close()
 
     hostname, _ := os.Hostname()
-    ipAddress := "取得したローカルIP" // IP アドレスの取得ロジックを実装する必要あり
+    ipAddress := getLocalIP() // agent.go では getLocalIP() を利用（UDPで8.8.8.8:80へ接続しLocalAddr()からIP取得）
     handshake := HandshakeMessage{
         Passphrase: passphrase,
         Hostname:   hostname,
