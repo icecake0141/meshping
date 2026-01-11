@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="900" xmlns="http://www.w3.org/2000/svg">
+  <!-- Title -->
+  <text x="600" y="40" font-family="Arial, sans-serif" font-size="32" font-weight="bold" text-anchor="middle" fill="#2c3e50">
+    Meshping Network Monitoring System
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="600" y="70" font-family="Arial, sans-serif" font-size="16" text-anchor="middle" fill="#7f8c8d">
+    Real-time ICMP Monitoring with Distributed Agents
+  </text>
+  
+  <!-- Use Cases Box -->
+  <rect x="50" y="100" width="350" height="160" fill="#e8f5e9" stroke="#4caf50" stroke-width="2" rx="10"/>
+  <text x="225" y="130" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#2e7d32">
+    💡 When is it useful?
+  </text>
+  <text x="70" y="160" font-family="Arial, sans-serif" font-size="14" fill="#1b5e20">
+    ✓ Multi-location network reachability monitoring
+  </text>
+  <text x="70" y="185" font-family="Arial, sans-serif" font-size="14" fill="#1b5e20">
+    ✓ Server and network device health monitoring
+  </text>
+  <text x="70" y="210" font-family="Arial, sans-serif" font-size="14" fill="#1b5e20">
+    ✓ Real-time latency and response time visualization
+  </text>
+  <text x="70" y="235" font-family="Arial, sans-serif" font-size="14" fill="#1b5e20">
+    ✓ Unified network monitoring in distributed environments
+  </text>
+  
+  <!-- What is it Box -->
+  <rect x="450" y="100" width="350" height="160" fill="#e3f2fd" stroke="#2196f3" stroke-width="2" rx="10"/>
+  <text x="625" y="130" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#1565c0">
+    🎯 What does it do?
+  </text>
+  <text x="470" y="160" font-family="Arial, sans-serif" font-size="14" fill="#0d47a1">
+    Multiple monitoring agents periodically send
+  </text>
+  <text x="470" y="185" font-family="Arial, sans-serif" font-size="14" fill="#0d47a1">
+    ICMP pings to target hosts from various
+  </text>
+  <text x="470" y="210" font-family="Arial, sans-serif" font-size="14" fill="#0d47a1">
+    locations. The management server collects
+  </text>
+  <text x="470" y="235" font-family="Arial, sans-serif" font-size="14" fill="#0d47a1">
+    and visualizes results via WebSocket.
+  </text>
+  
+  <!-- Tech Stack Box -->
+  <rect x="850" y="100" width="300" height="160" fill="#fff3e0" stroke="#ff9800" stroke-width="2" rx="10"/>
+  <text x="1000" y="130" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#e65100">
+    🔧 Tech Stack
+  </text>
+  <text x="870" y="160" font-family="Arial, sans-serif" font-size="14" fill="#bf360c">
+    Server: Python + Flask
+  </text>
+  <text x="870" y="185" font-family="Arial, sans-serif" font-size="14" fill="#bf360c">
+    WebSocket: Flask-SocketIO
+  </text>
+  <text x="870" y="210" font-family="Arial, sans-serif" font-size="14" fill="#bf360c">
+    Database: SQLite
+  </text>
+  <text x="870" y="235" font-family="Arial, sans-serif" font-size="14" fill="#bf360c">
+    Agent: Go language
+  </text>
+  
+  <!-- Main Architecture Section -->
+  <text x="600" y="310" font-family="Arial, sans-serif" font-size="20" font-weight="bold" text-anchor="middle" fill="#2c3e50">
+    📊 System Architecture
+  </text>
+  
+  <!-- Management Server -->
+  <rect x="450" y="340" width="300" height="220" fill="#eceff1" stroke="#37474f" stroke-width="3" rx="10"/>
+  <text x="600" y="370" font-family="Arial, sans-serif" font-size="18" font-weight="bold" text-anchor="middle" fill="#263238">
+    Management Server (server.py)
+  </text>
+  
+  <!-- Server Components -->
+  <rect x="470" y="385" width="260" height="40" fill="#bbdefb" stroke="#1976d2" stroke-width="2" rx="5"/>
+  <text x="600" y="410" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#0d47a1">
+    Flask Web UI (Admin Dashboard)
+  </text>
+  
+  <rect x="470" y="435" width="260" height="40" fill="#c5cae9" stroke="#3f51b5" stroke-width="2" rx="5"/>
+  <text x="600" y="460" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#1a237e">
+    Flask-SocketIO (WebSocket Communication)
+  </text>
+  
+  <rect x="470" y="485" width="260" height="40" fill="#b2dfdb" stroke="#00897b" stroke-width="2" rx="5"/>
+  <text x="600" y="510" font-family="Arial, sans-serif" font-size="13" text-anchor="middle" fill="#004d40">
+    SQLite + Memory Cache (Data Storage)
+  </text>
+  
+  <!-- Monitoring Agents -->
+  <g id="agent1">
+    <rect x="100" y="620" width="200" height="180" fill="#fff9c4" stroke="#f57c00" stroke-width="3" rx="10"/>
+    <text x="200" y="650" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#e65100">
+      Monitoring Agent #1
+    </text>
+    <text x="200" y="675" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#bf360c">
+      (agent.go - Location A)
+    </text>
+    
+    <rect x="120" y="690" width="160" height="30" fill="#ffccbc" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="200" y="710" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#bf360c">
+      Send ICMP Ping
+    </text>
+    
+    <rect x="120" y="730" width="160" height="30" fill="#ffccbc" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="200" y="750" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#bf360c">
+      Measure Response Time
+    </text>
+    
+    <rect x="120" y="770" width="160" height="20" fill="#ffab91" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="200" y="783" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#bf360c">
+      Send data every 5 seconds
+    </text>
+  </g>
+  
+  <g id="agent2">
+    <rect x="350" y="620" width="200" height="180" fill="#fff9c4" stroke="#f57c00" stroke-width="3" rx="10"/>
+    <text x="450" y="650" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#e65100">
+      Monitoring Agent #2
+    </text>
+    <text x="450" y="675" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#bf360c">
+      (agent.go - Location B)
+    </text>
+    
+    <rect x="370" y="690" width="160" height="30" fill="#ffccbc" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="450" y="710" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#bf360c">
+      Send ICMP Ping
+    </text>
+    
+    <rect x="370" y="730" width="160" height="30" fill="#ffccbc" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="450" y="750" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#bf360c">
+      Measure Response Time
+    </text>
+    
+    <rect x="370" y="770" width="160" height="20" fill="#ffab91" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="450" y="783" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#bf360c">
+      Send data every 5 seconds
+    </text>
+  </g>
+  
+  <g id="agent3">
+    <rect x="600" y="620" width="200" height="180" fill="#fff9c4" stroke="#f57c00" stroke-width="3" rx="10"/>
+    <text x="700" y="650" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#e65100">
+      Monitoring Agent #N
+    </text>
+    <text x="700" y="675" font-family="Arial, sans-serif" font-size="12" text-anchor="middle" fill="#bf360c">
+      (agent.go - Location N)
+    </text>
+    
+    <rect x="620" y="690" width="160" height="30" fill="#ffccbc" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="700" y="710" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#bf360c">
+      Send ICMP Ping
+    </text>
+    
+    <rect x="620" y="730" width="160" height="30" fill="#ffccbc" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="700" y="750" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#bf360c">
+      Measure Response Time
+    </text>
+    
+    <rect x="620" y="770" width="160" height="20" fill="#ffab91" stroke="#d84315" stroke-width="1" rx="3"/>
+    <text x="700" y="783" font-family="Arial, sans-serif" font-size="10" text-anchor="middle" fill="#bf360c">
+      Send data every 5 seconds
+    </text>
+  </g>
+  
+  <!-- Monitoring Targets -->
+  <g id="targets">
+    <rect x="900" y="620" width="250" height="180" fill="#e1bee7" stroke="#7b1fa2" stroke-width="3" rx="10"/>
+    <text x="1025" y="650" font-family="Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#4a148c">
+      Monitoring Targets
+    </text>
+    
+    <circle cx="950" cy="690" r="20" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="980" y="695" font-family="Arial, sans-serif" font-size="12" fill="#4a148c">
+      Server (8.8.8.8)
+    </text>
+    
+    <circle cx="950" cy="730" r="20" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="980" y="735" font-family="Arial, sans-serif" font-size="12" fill="#4a148c">
+      Router (192.168.1.1)
+    </text>
+    
+    <circle cx="950" cy="770" r="20" fill="#ce93d8" stroke="#6a1b9a" stroke-width="2"/>
+    <text x="980" y="775" font-family="Arial, sans-serif" font-size="12" fill="#4a148c">
+      Other Hosts
+    </text>
+  </g>
+  
+  <!-- Administrator -->
+  <g id="admin">
+    <rect x="50" y="360" width="180" height="120" fill="#c8e6c9" stroke="#388e3c" stroke-width="3" rx="10"/>
+    <circle cx="140" cy="400" r="25" fill="#81c784" stroke="#2e7d32" stroke-width="2"/>
+    <text x="140" y="410" font-family="Arial, sans-serif" font-size="20" text-anchor="middle">👤</text>
+    <text x="140" y="440" font-family="Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#1b5e20">
+      Administrator
+    </text>
+    <text x="140" y="460" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#2e7d32">
+      Agent Approval
+    </text>
+    <text x="140" y="475" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#2e7d32">
+      Target Management
+    </text>
+  </g>
+  
+  <!-- Arrows and Communication Flow -->
+  <!-- Admin to Server -->
+  <defs>
+    <marker id="arrowgreen" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#388e3c" />
+    </marker>
+    <marker id="arrowblue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#1976d2" />
+    </marker>
+    <marker id="arroworange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#f57c00" />
+    </marker>
+    <marker id="arrowpurple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#7b1fa2" />
+    </marker>
+  </defs>
+  
+  <!-- Admin accessing web UI -->
+  <path d="M 230 420 L 450 420" stroke="#388e3c" stroke-width="3" fill="none" marker-end="url(#arrowgreen)" stroke-dasharray="5,5"/>
+  <text x="340" y="410" font-family="Arial, sans-serif" font-size="11" fill="#388e3c">
+    Web UI Access
+  </text>
+  
+  <!-- Server to Agents (WebSocket) -->
+  <path d="M 520 560 L 220 620" stroke="#1976d2" stroke-width="3" fill="none" marker-end="url(#arrowblue)"/>
+  <text x="330" y="580" font-family="Arial, sans-serif" font-size="11" fill="#1976d2">
+    WebSocket
+  </text>
+  <text x="315" y="595" font-family="Arial, sans-serif" font-size="10" fill="#1976d2">
+    (Push Targets)
+  </text>
+  
+  <path d="M 600 560 L 450 620" stroke="#1976d2" stroke-width="3" fill="none" marker-end="url(#arrowblue)"/>
+  
+  <path d="M 680 560 L 700 620" stroke="#1976d2" stroke-width="3" fill="none" marker-end="url(#arrowblue)"/>
+  
+  <!-- Agents to Server (Data) -->
+  <path d="M 200 620 L 500 560" stroke="#f57c00" stroke-width="3" fill="none" marker-end="url(#arroworange)"/>
+  <text x="280" y="575" font-family="Arial, sans-serif" font-size="10" fill="#f57c00">
+    Send Monitoring Data
+  </text>
+  
+  <path d="M 450 620 L 580 560" stroke="#f57c00" stroke-width="3" fill="none" marker-end="url(#arroworange)"/>
+  
+  <path d="M 700 620 L 660 560" stroke="#f57c00" stroke-width="3" fill="none" marker-end="url(#arroworange)"/>
+  
+  <!-- Agents to Targets (ICMP Ping) -->
+  <path d="M 300 710 L 900 710" stroke="#7b1fa2" stroke-width="2" fill="none" marker-end="url(#arrowpurple)" stroke-dasharray="3,3"/>
+  <text x="550" y="700" font-family="Arial, sans-serif" font-size="11" fill="#7b1fa2">
+    ICMP Ping
+  </text>
+  
+  <path d="M 550 710 L 900 710" stroke="#7b1fa2" stroke-width="2" fill="none" marker-end="url(#arrowpurple)" stroke-dasharray="3,3"/>
+  
+  <path d="M 800 710 L 900 710" stroke="#7b1fa2" stroke-width="2" fill="none" marker-end="url(#arrowpurple)" stroke-dasharray="3,3"/>
+  
+  <!-- Data Flow Labels -->
+  <text x="50" y="850" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2c3e50">
+    🔄 Data Flow:
+  </text>
+  <text x="50" y="870" font-family="Arial, sans-serif" font-size="12" fill="#34495e">
+    1. Administrator approves agents and configures monitoring targets
+  </text>
+  <text x="50" y="888" font-family="Arial, sans-serif" font-size="12" fill="#34495e">
+    2. Server pushes target list to all agents via WebSocket
+  </text>
+  
+  <text x="600" y="870" font-family="Arial, sans-serif" font-size="12" fill="#34495e">
+    3. Each agent performs ICMP ping to target hosts every 5 seconds
+  </text>
+  <text x="600" y="888" font-family="Arial, sans-serif" font-size="12" fill="#34495e">
+    4. Measurement results (RTT/status) are sent to server for DB storage and visualization
+  </text>
+</svg>
