@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# NOTE: This file may include code that was generated or suggested by a large language model (LLM).
 
 """
 Unit tests for the Meshping server application.
