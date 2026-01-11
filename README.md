@@ -3,6 +3,12 @@
 Meshpingは、管理サーバと監視エージェントによるネットワーク監視システムです。  
 本プロジェクトは、Flask/Flask-SocketIO、SQLiteを用いた管理サーバと、Go言語による監視エージェントで構成されます。
 
+## システム概要図
+
+システム全体の構成と動作の流れは以下の図をご覧ください：
+
+![Meshping Architecture Overview](architecture_overview.svg)
+
 ## 構成
 
 - **管理サーバ (server.py)**
