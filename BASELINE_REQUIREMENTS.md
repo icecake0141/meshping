@@ -155,14 +155,14 @@ Meshping is a network monitoring system consisting of a management server (`serv
 **Specification:** `specs.txt` (lines 67-68)
 
 **Missing Features:**
-- Explicit 30-minute buffer limit enforcement
+- Explicit 30-minute buffer retention limit enforcement (spec states "最大30分間保持" - maximum 30 minutes)
 - Buffer size limits
 - Overflow handling
 
 **Current State:**
-- Basic buffering exists (`unsentBuffer` in agent.go)
-- No explicit time-based or size-based limits
-- Could potentially grow without bounds
+- Basic buffering exists (`unsentBuffer` in agent.go lines 252-294)
+- No time-based or size-based limit enforcement
+- Buffer will grow indefinitely during prolonged connection issues
 
 ### 6. Enhanced Security Features
 **Status:** ❌ Not Implemented  
@@ -205,7 +205,9 @@ Meshping is a network monitoring system consisting of a management server (`serv
 | **Monitoring** | 2 | 1 (buffering) | 0 | 3 |
 | **Data Storage** | 2 | 1 (retention) | 0 | 3 |
 | **Visualization** | 1 | 0 | 2 (real-time, graphs) | 3 |
-| **Security** | 1 | 0 | 2 (encryption, user auth) | 3 |
+| **Security** | 1 (TLS*) | 0 | 2 (encryption, user auth) | 3 |
+
+*Note: TLS is implemented but optional (not enforced), counted as implemented for baseline purposes
 
 **Overall Completion:** ~65% of specified features are fully implemented
 
@@ -240,7 +242,9 @@ Based on gap analysis, recommended implementation priorities:
 ## 📝 Notes
 
 - This document should be updated whenever features are added or removed
-- Line number references are accurate as of 2026-01-11 but may become outdated as code evolves - use in conjunction with file/function names
+- Line number references are accurate as of 2026-01-11 (commit hash: can be found via `git log`)
+  - Consider using git commit hashes for precise version tracking
+  - Line numbers may become outdated as code evolves - use in conjunction with file/function names
 - Testing coverage: Basic tests exist in `tests/` directory but coverage is incomplete
 - Production readiness: Current implementation is PoC quality; security review required before production use
 
