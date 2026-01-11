@@ -13,6 +13,12 @@ Meshpingは、管理サーバと監視エージェントによるネットワー
 
 *[英語版の図はこちら](architecture_overview_en.svg)*
 
+## ドキュメント
+
+- **[ベースライン要件](BASELINE_REQUIREMENTS.md)** - 現在のPoC実装状況と仕様ギャップ（英語）
+- **[完全な仕様書](specs.txt)** - 全機能の仕様（日本語）
+- **[実装詳細](implementation.txt)** - 技術的な実装概要（日本語）
+
 ## 構成
 
 - **管理サーバ (server.py)**
