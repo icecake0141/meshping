@@ -13,6 +13,12 @@ See the diagram below for an overview of the system architecture and data flow:
 
 *Also available in [Japanese](architecture_overview.svg)*
 
+## Documentation
+
+- **[Baseline Requirements](BASELINE_REQUIREMENTS.md)** - Current PoC implementation status vs. specification gaps
+- **[Full Specification](specs.txt)** - Complete feature specification (Japanese)
+- **[Implementation Details](implementation.txt)** - Technical implementation overview
+
 ## Architecture
 
 - **Management Server (server.py)**
