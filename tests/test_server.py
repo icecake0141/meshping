@@ -38,3 +38,19 @@ def test_update_targets_with_targets_returns_200_and_targets(client):
     assert response.status_code == 200
     data = response.get_json()
     assert data["targets"] == payload["targets"]
+
+
+def test_update_targets_with_non_list_targets_returns_400(client):
+    payload = {"targets": "not a list"}
+
+    response = client.post("/admin/update_targets", json=payload)
+
+    assert response.status_code == 400
+
+
+def test_update_targets_with_non_string_elements_returns_400(client):
+    payload = {"targets": ["10.0.0.1", 123, "10.0.0.3"]}
+
+    response = client.post("/admin/update_targets", json=payload)
+
+    assert response.status_code == 400
