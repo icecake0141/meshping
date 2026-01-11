@@ -86,7 +86,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 
 ### 8. TLS Support (Optional)
 **Status:** ✅ Implemented (self-signed)  
-**Source Files:** `server.py` (lines 289-294), `README.md` (lines 109-138)
+**Source Files:** `server.py` (lines 289-294), `README.md` (lines 115-144)
 
 - **HTTPS/WSS support**: Server can run with TLS enabled
 - **Self-signed certificates**: Documentation for generating cert.pem and key.pem
@@ -140,14 +140,15 @@ Meshping is a network monitoring system consisting of a management server (`serv
 **Specification:** `specs.txt` (lines 30-34)
 
 **Missing Features:**
-- Automatic cleanup of data older than 24 hours
+- Automatic cleanup of data older than 24 hours (specs.txt states this as current requirement)
 - Configurable retention periods
 - Database maintenance tasks
 
 **Current State:** 
-- 1-hour cache implemented and working
+- 1-hour cache implemented and working (old data automatically removed from cache)
 - Data is written to SQLite but never deleted
-- No retention policy enforcement (database will grow indefinitely)
+- No 24-hour retention policy enforcement (database will grow indefinitely)
+- Specification indicates 24-hour retention should be implemented, with future plans for configurability
 
 ### 5. Agent Local Buffer Details
 **Status:** ⚠️ Partially Implemented  
@@ -239,6 +240,7 @@ Based on gap analysis, recommended implementation priorities:
 ## 📝 Notes
 
 - This document should be updated whenever features are added or removed
+- Line number references are accurate as of 2026-01-11 but may become outdated as code evolves - use in conjunction with file/function names
 - Testing coverage: Basic tests exist in `tests/` directory but coverage is incomplete
 - Production readiness: Current implementation is PoC quality; security review required before production use
 
