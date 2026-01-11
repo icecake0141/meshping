@@ -1,5 +1,6 @@
 """Integration-style tests for monitoring data retrieval."""
 
+# pylint: disable=import-error,duplicate-code
 import datetime
 
 import pytest
@@ -24,7 +25,9 @@ def client(tmp_path):
         server.db.drop_all()
 
 
-def test_get_monitoring_data_returns_recent_entries_from_db(client):
+def test_get_monitoring_data_returns_recent_entries_from_db(
+    client,
+):  # pylint: disable=redefined-outer-name
     """Ensure monitoring endpoint filters out old entries from database."""
     now = datetime.datetime.utcnow()
     recent = now - datetime.timedelta(minutes=10)
