@@ -22,6 +22,7 @@ and collects ping data from distributed agents across the network.
 """
 
 # pylint: disable=import-error
+import typing
 import base64
 import datetime
 import functools
@@ -166,7 +167,7 @@ def _send_webhook(url: str, payload: dict) -> None:
         logging.error("Alert webhook delivery failed (%s): %s", url, exc)
 
 
-def _find_matching_rule(target: str) -> AlertRule | None:
+def _find_matching_rule(target: str) -> typing.Optional["AlertRule"]:
     """Return the first AlertRule that matches *target* (exact match before wildcard)."""
     exact = AlertRule.query.filter_by(target=target).first()
     if exact:
