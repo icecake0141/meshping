@@ -136,7 +136,7 @@ def test_delete_nonexistent_alert_rule_returns_404(client):
 # ── evaluate_alert unit tests ─────────────────────────────────────────────────
 
 
-def test_evaluate_alert_no_rule_does_nothing(client):
+def test_evaluate_alert_no_rule_does_nothing(client):  # pylint: disable=unused-argument
     """evaluate_alert is a no-op when no matching rule exists."""
     with server.app.app_context():
         # No rules in DB; should not raise or create AlertState rows.
@@ -144,7 +144,7 @@ def test_evaluate_alert_no_rule_does_nothing(client):
         assert server.AlertState.query.count() == 0
 
 
-def test_evaluate_alert_fires_alert_after_threshold(client):
+def test_evaluate_alert_fires_alert_after_threshold(client):  # pylint: disable=unused-argument
     """evaluate_alert raises an alert once consecutive failures reach the threshold."""
     with server.app.app_context():
         server.db.session.add(
@@ -154,7 +154,7 @@ def test_evaluate_alert_fires_alert_after_threshold(client):
 
         sent_payloads = []
 
-        def fake_send(url, payload):
+        def fake_send(_url, payload):
             sent_payloads.append(payload)
 
         original = server._send_webhook  # pylint: disable=protected-access
@@ -163,7 +163,7 @@ def test_evaluate_alert_fires_alert_after_threshold(client):
             # First two failures: no alert yet.
             server.evaluate_alert("agent-1", "8.8.8.8", "fail", 0)
             server.evaluate_alert("agent-1", "8.8.8.8", "fail", 0)
-            assert sent_payloads == []
+            assert not sent_payloads
 
             # Third failure: alert should fire.
             server.evaluate_alert("agent-1", "8.8.8.8", "fail", 0)
@@ -174,7 +174,7 @@ def test_evaluate_alert_fires_alert_after_threshold(client):
             server._send_webhook = original  # pylint: disable=protected-access
 
 
-def test_evaluate_alert_no_duplicate_alert_while_alerting(client):
+def test_evaluate_alert_no_duplicate_alert_while_alerting(client):  # pylint: disable=unused-argument
     """evaluate_alert does not send duplicate alerts once already in alerting state."""
     with server.app.app_context():
         server.db.session.add(
@@ -184,7 +184,7 @@ def test_evaluate_alert_no_duplicate_alert_while_alerting(client):
 
         sent_payloads = []
 
-        def fake_send(url, payload):
+        def fake_send(_url, payload):
             sent_payloads.append(payload)
 
         original = server._send_webhook  # pylint: disable=protected-access
@@ -202,7 +202,7 @@ def test_evaluate_alert_no_duplicate_alert_while_alerting(client):
             server._send_webhook = original  # pylint: disable=protected-access
 
 
-def test_evaluate_alert_sends_recovery_on_success(client):
+def test_evaluate_alert_sends_recovery_on_success(client):  # pylint: disable=unused-argument
     """evaluate_alert sends a recovery notification when the target recovers."""
     with server.app.app_context():
         server.db.session.add(
@@ -212,7 +212,7 @@ def test_evaluate_alert_sends_recovery_on_success(client):
 
         sent_payloads = []
 
-        def fake_send(url, payload):
+        def fake_send(_url, payload):
             sent_payloads.append(payload)
 
         original = server._send_webhook  # pylint: disable=protected-access
@@ -231,7 +231,7 @@ def test_evaluate_alert_sends_recovery_on_success(client):
             server._send_webhook = original  # pylint: disable=protected-access
 
 
-def test_evaluate_alert_latency_threshold(client):
+def test_evaluate_alert_latency_threshold(client):  # pylint: disable=unused-argument
     """evaluate_alert fires when latency exceeds the configured threshold."""
     with server.app.app_context():
         server.db.session.add(
@@ -245,7 +245,7 @@ def test_evaluate_alert_latency_threshold(client):
 
         sent_payloads = []
 
-        def fake_send(url, payload):
+        def fake_send(_url, payload):
             sent_payloads.append(payload)
 
         original = server._send_webhook  # pylint: disable=protected-access
@@ -253,7 +253,7 @@ def test_evaluate_alert_latency_threshold(client):
         try:
             # Latency below threshold: no alert.
             server.evaluate_alert("agent-1", "8.8.8.8", "ok", 50.0)
-            assert sent_payloads == []
+            assert not sent_payloads
 
             # Latency above threshold: alert.
             server.evaluate_alert("agent-1", "8.8.8.8", "ok", 200.0)
@@ -263,7 +263,7 @@ def test_evaluate_alert_latency_threshold(client):
             server._send_webhook = original  # pylint: disable=protected-access
 
 
-def test_evaluate_alert_wildcard_rule_matches_any_target(client):
+def test_evaluate_alert_wildcard_rule_matches_any_target(client):  # pylint: disable=unused-argument
     """A rule with target="*" matches any target."""
     with server.app.app_context():
         server.db.session.add(
@@ -273,7 +273,7 @@ def test_evaluate_alert_wildcard_rule_matches_any_target(client):
 
         sent_payloads = []
 
-        def fake_send(url, payload):
+        def fake_send(_url, payload):
             sent_payloads.append(payload)
 
         original = server._send_webhook  # pylint: disable=protected-access
@@ -304,7 +304,7 @@ def test_list_alert_states_shows_alerting_entry(client):
         )
         server.db.session.commit()
 
-        def _noop(url, payload):
+        def _noop(_url, _payload):
             pass
 
         original = server._send_webhook  # pylint: disable=protected-access
