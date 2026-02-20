@@ -18,9 +18,11 @@
 Unit tests for the Meshping server application.
 
 This module contains tests for the server's REST API endpoints,
-particularly the monitoring target management functionality.
+particularly the monitoring target management functionality and auth gating.
 """
 # pylint: disable=import-error
+import base64
+
 import pytest
 
 import server
@@ -92,3 +94,67 @@ def test_update_targets_with_non_string_elements_returns_400(test_client):
     response = test_client.post("/admin/update_targets", json=payload)
 
     assert response.status_code == 400
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Admin auth tests
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.fixture(name="authed_client")
+def authed_client_fixture(tmp_path, monkeypatch):
+    """Test client with ADMIN_TOKEN configured."""
+    monkeypatch.setattr(server, "ADMIN_TOKEN", "test-secret")
+    server.app.config.update(
+        TESTING=True,
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path / 'auth_test.db'}",
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    )
+    with server.app.app_context():
+        server.db.create_all()
+        server.current_targets = []
+        yield server.app.test_client()
+        server.db.session.remove()
+        server.db.drop_all()
+
+
+def _basic_auth_header(password: str) -> str:
+    """Build an Authorization header value for Basic auth with 'admin' user."""
+    credentials = base64.b64encode(f"admin:{password}".encode()).decode()
+    return f"Basic {credentials}"
+
+
+def test_admin_endpoint_returns_401_without_token(authed_client):
+    """When ADMIN_TOKEN is set, admin endpoint must return 401 without credentials."""
+    response = authed_client.post(
+        "/admin/update_targets", json={"targets": ["10.0.0.1"]}
+    )
+    assert response.status_code == 401
+
+
+def test_admin_endpoint_returns_401_with_wrong_token(authed_client):
+    """When ADMIN_TOKEN is set, admin endpoint must return 401 with wrong password."""
+    response = authed_client.post(
+        "/admin/update_targets",
+        json={"targets": ["10.0.0.1"]},
+        headers={"Authorization": _basic_auth_header("wrong-secret")},
+    )
+    assert response.status_code == 401
+
+
+def test_admin_endpoint_returns_200_with_correct_token(authed_client):
+    """When ADMIN_TOKEN is set, admin endpoint must return 200 with correct password."""
+    response = authed_client.post(
+        "/admin/update_targets",
+        json={"targets": ["10.0.0.1"]},
+        headers={"Authorization": _basic_auth_header("test-secret")},
+    )
+    assert response.status_code == 200
+
+
+def test_admin_endpoint_accessible_without_token_when_unconfigured(test_client):
+    """When ADMIN_TOKEN is not set, admin endpoints must remain accessible."""
+    response = test_client.post(
+        "/admin/update_targets", json={"targets": ["10.0.0.1"]}
+    )
+    assert response.status_code == 200

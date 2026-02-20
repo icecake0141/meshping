@@ -31,12 +31,12 @@ import (
 
 const (
 	// サーバのWebSocketエンドポイント（必要に応じて変更）
-	serverURL        = "ws://localhost:5000/agent"
-	passphrase       = "your_passphrase" // 管理サーバで発行されたパスフレーズ
-	version          = "1.0.0"
-	pingTimeout      = 3 * time.Second
-	icmpProtocolICMP = 1
-	echoData         = "HELLO-R-U-THERE"
+	serverURL         = "ws://localhost:5000/agent"
+	defaultPassphrase = "your_passphrase" // fallback; prefer AGENT_SECRET env var
+	version           = "1.0.0"
+	pingTimeout       = 3 * time.Second
+	icmpProtocolICMP  = 1
+	echoData          = "HELLO-R-U-THERE"
 )
 
 var (
@@ -87,6 +87,15 @@ type PingResult struct {
 	Target  string
 	Ok      bool
 	Latency float64
+}
+
+// getPassphrase returns the agent shared secret.
+// It reads AGENT_SECRET from the environment; falls back to the compiled default.
+func getPassphrase() string {
+	if secret := os.Getenv("AGENT_SECRET"); secret != "" {
+		return secret
+	}
+	return defaultPassphrase
 }
 
 // getHostname はローカルホスト名を取得します。
@@ -211,7 +220,7 @@ func main() {
 	hostname := getHostname()
 	ipAddress := getLocalIP()
 	handshake := HandshakeMessage{
-		Passphrase: passphrase,
+		Passphrase: getPassphrase(),
 		Hostname:   hostname,
 		IPAddress:  ipAddress,
 		Version:    version,
