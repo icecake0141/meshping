@@ -22,11 +22,16 @@ and collects ping data from distributed agents across the network.
 """
 
 # pylint: disable=import-error
+import typing
 import base64
 import datetime
 import functools
+import logging
 import os
 import secrets
+import urllib.request
+import urllib.error
+import json as json_module
 
 from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
 from flask_sqlalchemy import SQLAlchemy
@@ -42,6 +47,9 @@ ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
 
 # Shared secret used to authenticate agent connections.  Set AGENT_SECRET env var to enable.
 AGENT_SECRET = os.environ.get("AGENT_SECRET", "")
+
+# Default webhook URL for alert notifications.  Set ALERT_WEBHOOK_URL env var to enable.
+ALERT_WEBHOOK_URL = os.environ.get("ALERT_WEBHOOK_URL", "")
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app)
@@ -108,8 +116,137 @@ class MonitoringData(db.Model):  # pylint: disable=too-few-public-methods
     latency = db.Column(db.Float)  # RTT（成功時） or 0
 
 
+class AlertRule(db.Model):  # pylint: disable=too-few-public-methods
+    """Database model for alert threshold rules."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Target IP address to match, or "*" to match all targets.
+    target = db.Column(db.String(64), nullable=False)
+    # Number of consecutive failures before an alert is raised.
+    consecutive_failures = db.Column(db.Integer, default=3, nullable=False)
+    # Latency threshold in milliseconds; 0 disables latency-based alerting.
+    latency_threshold_ms = db.Column(db.Float, default=0.0, nullable=False)
+    # Optional per-rule webhook URL; overrides ALERT_WEBHOOK_URL when set.
+    webhook_url = db.Column(db.String(256), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+
+class AlertState(db.Model):  # pylint: disable=too-few-public-methods
+    """Database model tracking the current alert state per agent+target pair."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    agent_id = db.Column(db.String(64), nullable=False)
+    target = db.Column(db.String(64), nullable=False)
+    # Running count of consecutive failures for this agent+target.
+    consecutive_failures = db.Column(db.Integer, default=0, nullable=False)
+    # "ok" or "alerting"
+    status = db.Column(db.String(16), default="ok", nullable=False)
+    last_alert_sent = db.Column(db.DateTime, nullable=True)
+    __table_args__ = (db.UniqueConstraint("agent_id", "target", name="uq_agent_target"),)
+
+
 # メモリ上のキャッシュ（直近1時間分のデータ保持）
 recent_cache = {}  # { agent_id: [MonitoringData, ...] }
+
+
+def _send_webhook(url: str, payload: dict) -> None:
+    """POST a JSON payload to the given webhook URL; logs errors silently."""
+    if not url:
+        return
+    data = json_module.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # nosec B310
+            logging.info("Alert webhook sent to %s: HTTP %s", url, resp.status)
+    except urllib.error.URLError as exc:
+        logging.error("Alert webhook delivery failed (%s): %s", url, exc)
+
+
+def _find_matching_rule(target: str) -> typing.Optional["AlertRule"]:
+    """Return the first AlertRule that matches *target* (exact match before wildcard)."""
+    exact = AlertRule.query.filter_by(target=target).first()
+    if exact:
+        return exact
+    return AlertRule.query.filter_by(target="*").first()
+
+
+def _get_or_create_alert_state(agent_id: str, target: str) -> AlertState:
+    """Return the AlertState row for agent_id+target, creating it if absent."""
+    state = AlertState.query.filter_by(agent_id=agent_id, target=target).first()
+    if not state:
+        state = AlertState(
+            agent_id=agent_id,
+            target=target,
+            consecutive_failures=0,
+            status="ok",
+        )
+        db.session.add(state)
+    return state
+
+
+def evaluate_alert(agent_id: str, target: str, result: str, latency: float) -> None:
+    """
+    Evaluate alert conditions for a single monitoring entry.
+
+    Raises an alert when consecutive failures reach the configured threshold,
+    and sends a recovery notification when the target recovers.  Webhook
+    delivery uses the per-rule URL when set, otherwise ALERT_WEBHOOK_URL.
+    """
+    rule = _find_matching_rule(target)
+    if rule is None:
+        return
+
+    state = _get_or_create_alert_state(agent_id, target)
+
+    # Determine whether this sample counts as a failure.
+    is_failure = result != "ok"
+    if (
+        not is_failure
+        and rule.latency_threshold_ms > 0
+        and latency > rule.latency_threshold_ms
+    ):
+        is_failure = True
+
+    webhook_url = rule.webhook_url or ALERT_WEBHOOK_URL
+
+    if is_failure:
+        state.consecutive_failures += 1
+        if (
+            state.consecutive_failures >= rule.consecutive_failures
+            and state.status != "alerting"
+        ):
+            state.status = "alerting"
+            state.last_alert_sent = datetime.datetime.utcnow()
+            _send_webhook(
+                webhook_url,
+                {
+                    "event": "alert",
+                    "agent_id": agent_id,
+                    "target": target,
+                    "consecutive_failures": state.consecutive_failures,
+                    "timestamp": state.last_alert_sent.isoformat(),
+                },
+            )
+    else:
+        if state.status == "alerting":
+            state.status = "ok"
+            state.consecutive_failures = 0
+            _send_webhook(
+                webhook_url,
+                {
+                    "event": "recovery",
+                    "agent_id": agent_id,
+                    "target": target,
+                    "timestamp": datetime.datetime.utcnow().isoformat(),
+                },
+            )
+        else:
+            state.consecutive_failures = 0
 
 
 # Web UIルート（管理者向けダッシュボード）
@@ -336,6 +473,13 @@ def handle_monitoring_data(data):
         recent_cache[agent_id] = [
             d for d in recent_cache[agent_id] if d.timestamp >= cutoff
         ]
+        # Evaluate alert conditions for this entry.
+        evaluate_alert(
+            agent_id,
+            entry["target"],
+            entry["result"],
+            entry.get("latency", 0),
+        )
     db.session.commit()
     emit("data_received", {"message": "監視データ保存完了"})
 
@@ -362,6 +506,116 @@ def get_monitoring_data(agent_id, target):
         for d in mem_data
     ]
     return jsonify(response)
+
+
+# ── Alert Rules Management API ──────────────────────────────────────────────
+
+
+@app.route("/admin/alert_rules", methods=["GET"])
+@require_admin_auth
+def list_alert_rules():
+    """Return all configured alert rules as JSON."""
+    rules = AlertRule.query.order_by(AlertRule.id).all()
+    return jsonify(
+        [
+            {
+                "id": r.id,
+                "target": r.target,
+                "consecutive_failures": r.consecutive_failures,
+                "latency_threshold_ms": r.latency_threshold_ms,
+                "webhook_url": r.webhook_url,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rules
+        ]
+    )
+
+
+@app.route("/admin/alert_rules", methods=["POST"])
+@require_admin_auth
+def create_alert_rule():
+    """Create a new alert rule.
+
+    Expected JSON body::
+
+        {
+            "target": "8.8.8.8",          # required; use "*" for all targets
+            "consecutive_failures": 3,     # optional, default 3
+            "latency_threshold_ms": 200,   # optional, default 0 (disabled)
+            "webhook_url": "https://..."   # optional; overrides ALERT_WEBHOOK_URL
+        }
+    """
+    payload = request.get_json(silent=True)
+    if payload is None or "target" not in payload:
+        return jsonify({"error": "Missing required field: target"}), 400
+
+    target = payload.get("target", "").strip()
+    if not target:
+        return jsonify({"error": "target must be a non-empty string"}), 400
+
+    consecutive_failures = payload.get("consecutive_failures", 3)
+    latency_threshold_ms = payload.get("latency_threshold_ms", 0.0)
+    webhook_url = payload.get("webhook_url") or None
+
+    if not isinstance(consecutive_failures, int) or consecutive_failures < 1:
+        return jsonify({"error": "consecutive_failures must be a positive integer"}), 400
+    if not isinstance(latency_threshold_ms, (int, float)) or latency_threshold_ms < 0:
+        return jsonify({"error": "latency_threshold_ms must be a non-negative number"}), 400
+
+    rule = AlertRule(
+        target=target,
+        consecutive_failures=consecutive_failures,
+        latency_threshold_ms=float(latency_threshold_ms),
+        webhook_url=webhook_url,
+    )
+    db.session.add(rule)
+    db.session.commit()
+    return (
+        jsonify(
+            {
+                "id": rule.id,
+                "target": rule.target,
+                "consecutive_failures": rule.consecutive_failures,
+                "latency_threshold_ms": rule.latency_threshold_ms,
+                "webhook_url": rule.webhook_url,
+            }
+        ),
+        201,
+    )
+
+
+@app.route("/admin/alert_rules/<int:rule_id>", methods=["DELETE"])
+@require_admin_auth
+def delete_alert_rule(rule_id):
+    """Delete an alert rule by ID."""
+    rule = AlertRule.query.get(rule_id)
+    if not rule:
+        return jsonify({"error": "Alert rule not found"}), 404
+    db.session.delete(rule)
+    db.session.commit()
+    return jsonify({"message": "Alert rule deleted"})
+
+
+@app.route("/admin/alert_states", methods=["GET"])
+@require_admin_auth
+def list_alert_states():
+    """Return current alert states for all agent+target pairs."""
+    states = AlertState.query.order_by(AlertState.agent_id, AlertState.target).all()
+    return jsonify(
+        [
+            {
+                "id": s.id,
+                "agent_id": s.agent_id,
+                "target": s.target,
+                "consecutive_failures": s.consecutive_failures,
+                "status": s.status,
+                "last_alert_sent": (
+                    s.last_alert_sent.isoformat() if s.last_alert_sent else None
+                ),
+            }
+            for s in states
+        ]
+    )
 
 
 if __name__ == "__main__":
