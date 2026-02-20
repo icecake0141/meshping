@@ -13,10 +13,13 @@
 // limitations under the License.
 //
 // NOTE: This file may include code that was generated or suggested by a large language model (LLM).
+// This file was created or modified with the assistance of an AI (Large Language Model).
+// Review required for correctness, security, and licensing.
 
 package main
 
 import (
+	"math"
 	"testing"
 )
 
@@ -59,5 +62,78 @@ func TestPingAllTargetsUsesTargetsSnapshot(t *testing.T) {
 	}
 	if !seen["10.0.0.1"] || !seen["10.0.0.2"] {
 		t.Fatalf("expected ping calls for all targets, got %+v", seen)
+	}
+}
+
+// resetTargetHistory clears the rolling window state between sub-tests.
+func resetTargetHistory() {
+	targetHistoryMutex.Lock()
+	targetHistory = map[string]*targetWindow{}
+	targetHistoryMutex.Unlock()
+}
+
+func TestComputeSLAMetrics_AllSuccess(t *testing.T) {
+	resetTargetHistory()
+
+	// Feed 4 successful pings with known latencies.
+	latencies := []float64{10.0, 12.0, 11.0, 13.0}
+	var jitter, packetLoss float64
+	for _, l := range latencies {
+		jitter, packetLoss = computeSLAMetrics("192.0.2.1", true, l)
+	}
+
+	if packetLoss != 0 {
+		t.Fatalf("expected 0%% packet loss, got %.2f", packetLoss)
+	}
+
+	// Expected jitter = mean(|12-10|, |11-12|, |13-11|) = mean(2, 1, 2) = 5/3 ≈ 1.6667
+	expectedJitter := (2.0 + 1.0 + 2.0) / 3.0
+	if math.Abs(jitter-expectedJitter) > 1e-9 {
+		t.Fatalf("expected jitter %.6f, got %.6f", expectedJitter, jitter)
+	}
+}
+
+func TestComputeSLAMetrics_PacketLoss(t *testing.T) {
+	resetTargetHistory()
+
+	// 3 failures, 1 success → 75% packet loss.
+	computeSLAMetrics("192.0.2.2", false, 0)
+	computeSLAMetrics("192.0.2.2", false, 0)
+	computeSLAMetrics("192.0.2.2", false, 0)
+	_, packetLoss := computeSLAMetrics("192.0.2.2", true, 20.0)
+
+	if math.Abs(packetLoss-75.0) > 1e-9 {
+		t.Fatalf("expected 75%% packet loss, got %.2f", packetLoss)
+	}
+}
+
+func TestComputeSLAMetrics_SinglePingNoJitter(t *testing.T) {
+	resetTargetHistory()
+
+	jitter, packetLoss := computeSLAMetrics("192.0.2.3", true, 15.0)
+
+	if jitter != 0 {
+		t.Fatalf("expected jitter 0 with single ping, got %.6f", jitter)
+	}
+	if packetLoss != 0 {
+		t.Fatalf("expected 0%% packet loss, got %.2f", packetLoss)
+	}
+}
+
+func TestComputeSLAMetrics_RollingWindowEviction(t *testing.T) {
+	resetTargetHistory()
+
+	// Fill window beyond slaWindowSize with failures, then add successes.
+	for i := 0; i < slaWindowSize; i++ {
+		computeSLAMetrics("192.0.2.4", false, 0)
+	}
+	// Now add slaWindowSize successes — old failures should be evicted.
+	for i := 0; i < slaWindowSize; i++ {
+		computeSLAMetrics("192.0.2.4", true, float64(10+i))
+	}
+	_, packetLoss := computeSLAMetrics("192.0.2.4", true, 30.0)
+
+	if packetLoss != 0 {
+		t.Fatalf("expected 0%% packet loss after eviction, got %.2f", packetLoss)
 	}
 }
