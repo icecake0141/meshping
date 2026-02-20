@@ -22,23 +22,58 @@ and collects ping data from distributed agents across the network.
 """
 
 # pylint: disable=import-error
+import base64
 import datetime
+import functools
 import os
+import secrets
 
-from flask import Flask, request, jsonify, render_template, redirect, url_for
+from flask import Flask, request, jsonify, render_template, redirect, url_for, Response
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "replace_with_a_secure_key"
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "replace_with_a_secure_key")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///meshping.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Admin token for protecting admin endpoints.  Set ADMIN_TOKEN env var to enable.
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+
+# Shared secret used to authenticate agent connections.  Set AGENT_SECRET env var to enable.
+AGENT_SECRET = os.environ.get("AGENT_SECRET", "")
 
 db = SQLAlchemy(app)
 socketio = SocketIO(app)
 
 # Flask アプリケーション設定の直後にグローバル変数を初期化
 current_targets = []  # 監視対象IPリストの初期値（空リストで初期化）
+
+
+def require_admin_auth(f):
+    """Decorator that enforces HTTP Basic Auth on admin endpoints when ADMIN_TOKEN is set."""
+
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if not ADMIN_TOKEN:
+            # Auth not configured — allow access (backward-compatible).
+            return f(*args, **kwargs)
+        auth = request.headers.get("Authorization", "")
+        if auth.startswith("Basic "):
+            try:
+                decoded = base64.b64decode(auth[6:]).decode("utf-8")
+                _, _, password = decoded.partition(":")
+                if secrets.compare_digest(password, ADMIN_TOKEN):
+                    return f(*args, **kwargs)
+            except Exception:  # pylint: disable=broad-except
+                pass
+        return Response(
+            "Authentication required",
+            401,
+            {"WWW-Authenticate": 'Basic realm="Meshping Admin"'},
+        )
+
+    return decorated
 
 
 # DB Models
@@ -85,6 +120,7 @@ def index():
 
 
 @app.route("/admin")
+@require_admin_auth
 def admin_dashboard():
     """Display admin dashboard with agent status."""
     pending_agents = Agent.query.filter(Agent.status == "pending").all()
@@ -100,6 +136,7 @@ def admin_dashboard():
 
 
 @app.route("/admin/approve/<int:agent_db_id>", methods=["POST"])
+@require_admin_auth
 def approve_agent(agent_db_id):
     """Approve a pending agent."""
     agent = Agent.query.get(agent_db_id)
@@ -119,6 +156,7 @@ def approve_agent(agent_db_id):
 
 
 @app.route("/admin/reject/<int:agent_db_id>", methods=["POST"])
+@require_admin_auth
 def reject_agent(agent_db_id):
     """Reject and blacklist an agent."""
     agent = Agent.query.get(agent_db_id)
@@ -131,6 +169,7 @@ def reject_agent(agent_db_id):
 
 # 管理者用: 監視対象リスト更新API
 @app.route("/admin/update_targets", methods=["POST"])
+@require_admin_auth
 def update_targets():
     """Update the list of monitoring targets via API."""
     global current_targets  # pylint: disable=global-statement
@@ -155,6 +194,7 @@ def update_targets():
 
 
 @app.route("/admin/targets", methods=["GET"])
+@require_admin_auth
 def manage_targets():
     """Display targets management page."""
     # 管理画面用に監視対象リストの編集フォームを表示
@@ -162,6 +202,7 @@ def manage_targets():
 
 
 @app.route("/admin/targets", methods=["POST"])
+@require_admin_auth
 def update_targets_list():
     """Update the list of monitoring targets via form submission."""
     global current_targets  # pylint: disable=global-statement
@@ -177,6 +218,19 @@ def update_targets_list():
         )
         return redirect(url_for("manage_targets"))
     return "No targets provided", 400
+
+
+def is_valid_agent_passphrase(passphrase: str) -> bool:
+    """
+    Return True if the supplied passphrase is valid for the current AGENT_SECRET config.
+
+    When AGENT_SECRET is not configured (empty string), all passphrases are accepted
+    to preserve backward compatibility.  When it is configured, a constant-time
+    comparison is used to prevent timing-based side-channel attacks.
+    """
+    if not AGENT_SECRET:
+        return True
+    return secrets.compare_digest(passphrase or "", AGENT_SECRET)
 
 
 # WebSocketネームスペース '/agent' でエージェントとの通信を実施
@@ -199,6 +253,14 @@ def handle_handshake(data):
     hostname = data.get("hostname")
     ip_address = data.get("ip_address")
     version = data.get("version")
+
+    # Validate agent secret when configured.
+    if not is_valid_agent_passphrase(passphrase or ""):
+        emit(
+            "registration_status",
+            {"status": "rejected", "message": "Invalid credentials. Connection refused."},
+        )
+        return
 
     agent = Agent.query.filter_by(passphrase=passphrase).first()
     if not agent:
