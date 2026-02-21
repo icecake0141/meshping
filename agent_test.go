@@ -1,4 +1,5 @@
 // Copyright 2026 Meshping Contributors
+// SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -135,5 +136,24 @@ func TestComputeSLAMetrics_RollingWindowEviction(t *testing.T) {
 
 	if packetLoss != 0 {
 		t.Fatalf("expected 0%% packet loss after eviction, got %.2f", packetLoss)
+	}
+}
+
+func TestIsVersionBehind(t *testing.T) {
+	cases := []struct {
+		current string
+		target  string
+		want    bool
+	}{
+		{current: "1.0.0", target: "1.0.1", want: true},
+		{current: "1.2.0", target: "1.1.9", want: false},
+		{current: "1.0", target: "1.0.0", want: false},
+		{current: "", target: "2.0.0", want: true},
+	}
+
+	for _, c := range cases {
+		if got := isVersionBehind(c.current, c.target); got != c.want {
+			t.Fatalf("isVersionBehind(%q, %q) = %v, want %v", c.current, c.target, got, c.want)
+		}
 	}
 }

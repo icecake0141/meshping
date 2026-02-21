@@ -1,4 +1,5 @@
 # Copyright 2026 Meshping Contributors
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -108,6 +109,18 @@ class Agent(db.Model):  # pylint: disable=too-few-public-methods
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
+    last_seen_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+
+class AgentUpdatePolicy(db.Model):  # pylint: disable=too-few-public-methods
+    """Database model storing the latest agent update policy."""
+
+    id = db.Column(db.Integer, primary_key=True)
+    target_version = db.Column(db.String(32), nullable=False)
+    download_url = db.Column(db.String(256), nullable=False)
+    mandatory = db.Column(db.Boolean, default=False, nullable=False)
+    release_notes = db.Column(db.String(512), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 
 class MonitoringData(db.Model):  # pylint: disable=too-few-public-methods
@@ -178,6 +191,65 @@ def purge_old_monitoring_data() -> int:
     if deleted:
         logging.info("Purged %d monitoring rows older than %dh", deleted, RETENTION_HOURS)
     return deleted
+
+
+def _parse_version_segment(segment: str) -> int:
+    """Return the leading numeric portion of a version segment."""
+    digits = []
+    for char in segment:
+        if char.isdigit():
+            digits.append(char)
+        else:
+            break
+    return int("".join(digits)) if digits else 0
+
+
+def _normalize_version(version: typing.Optional[str]) -> typing.Tuple[int, ...]:
+    """Normalize a dotted version string into a tuple of integers."""
+    if not version:
+        return tuple()
+    parts = version.split(".")
+    return tuple(_parse_version_segment(part) for part in parts if part)
+
+
+def is_version_behind(current: typing.Optional[str], target: typing.Optional[str]) -> bool:
+    """Return True when current version is behind target version."""
+    if not target:
+        return False
+    if not current:
+        return True
+    current_parts = list(_normalize_version(current))
+    target_parts = list(_normalize_version(target))
+    max_len = max(len(current_parts), len(target_parts))
+    current_parts.extend([0] * (max_len - len(current_parts)))
+    target_parts.extend([0] * (max_len - len(target_parts)))
+    return tuple(current_parts) < tuple(target_parts)
+
+
+def _get_latest_update_policy() -> typing.Optional[AgentUpdatePolicy]:
+    """Return the most recent update policy, if any."""
+    return AgentUpdatePolicy.query.order_by(AgentUpdatePolicy.created_at.desc()).first()
+
+
+def _build_update_payload(policy: AgentUpdatePolicy) -> dict:
+    """Serialize update policy into a server message payload."""
+    return {
+        "type": "agent_update",
+        "target_version": policy.target_version,
+        "download_url": policy.download_url,
+        "mandatory": policy.mandatory,
+        "release_notes": policy.release_notes,
+        "created_at": policy.created_at.isoformat() if policy.created_at else None,
+    }
+
+
+def _should_notify_update(
+    agent_version: typing.Optional[str], policy: typing.Optional[AgentUpdatePolicy]
+) -> bool:
+    """Return True if the agent should be notified about the update policy."""
+    if policy is None:
+        return False
+    return is_version_behind(agent_version, policy.target_version)
 
 
 def _send_webhook(url: str, payload: dict) -> None:
@@ -358,6 +430,86 @@ def update_targets():
     return jsonify({"message": "Targets updated", "targets": current_targets})
 
 
+@app.route("/admin/update_policy", methods=["GET"])
+@require_admin_auth
+def get_update_policy():
+    """Return the latest configured agent update policy."""
+    policy = _get_latest_update_policy()
+    if not policy:
+        return jsonify(
+            {
+                "target_version": None,
+                "download_url": None,
+                "mandatory": False,
+                "release_notes": None,
+                "created_at": None,
+            }
+        )
+    return jsonify(_build_update_payload(policy))
+
+
+@app.route("/admin/update_policy", methods=["POST"])
+@require_admin_auth
+def set_update_policy():
+    """Create a new agent update policy and notify agents."""
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"error": "Missing JSON body"}), 400
+
+    target_version = (payload.get("target_version") or "").strip()
+    download_url = (payload.get("download_url") or "").strip()
+    mandatory = payload.get("mandatory", False)
+    release_notes = payload.get("release_notes") or None
+
+    if not target_version:
+        return jsonify({"error": "target_version is required"}), 400
+    if not download_url:
+        return jsonify({"error": "download_url is required"}), 400
+    if not isinstance(mandatory, bool):
+        return jsonify({"error": "mandatory must be a boolean"}), 400
+    if release_notes is not None and not isinstance(release_notes, str):
+        return jsonify({"error": "release_notes must be a string"}), 400
+
+    policy = AgentUpdatePolicy(
+        target_version=target_version,
+        download_url=download_url,
+        mandatory=mandatory,
+        release_notes=release_notes,
+    )
+    db.session.add(policy)
+    db.session.commit()
+
+    payload = _build_update_payload(policy)
+    socketio.emit("server_message", payload, namespace="/agent")
+    return jsonify(payload), 201
+
+
+@app.route("/admin/agent_versions", methods=["GET"])
+@require_admin_auth
+def list_agent_versions():
+    """Return agent version tracking data for update management."""
+    policy = _get_latest_update_policy()
+    agents = Agent.query.order_by(Agent.id).all()
+    return jsonify(
+        [
+            {
+                "id": agent.id,
+                "agent_id": agent.agent_id,
+                "hostname": agent.hostname,
+                "ip_address": agent.ip_address,
+                "version": agent.version,
+                "status": agent.status,
+                "last_seen_at": (
+                    agent.last_seen_at.isoformat() if agent.last_seen_at else None
+                ),
+                "update_required": _should_notify_update(agent.version, policy),
+                "target_version": policy.target_version if policy else None,
+            }
+            for agent in agents
+        ]
+    )
+
+
 # 管理画面での監視対象リスト管理機能を追加
 
 
@@ -421,6 +573,7 @@ def handle_handshake(data):
     hostname = data.get("hostname")
     ip_address = data.get("ip_address")
     version = data.get("version")
+    now = datetime.datetime.utcnow()
 
     # Validate agent secret when configured.
     if not is_valid_agent_passphrase(passphrase or ""):
@@ -439,6 +592,7 @@ def handle_handshake(data):
             version=version,
             passphrase=passphrase,
             status="pending",
+            last_seen_at=now,
         )
         db.session.add(agent)
         db.session.commit()
@@ -448,6 +602,9 @@ def handle_handshake(data):
         )
     else:
         # 再接続時または再登録時の処理
+        if version:
+            agent.version = version
+        agent.last_seen_at = now
         if agent.ip_address != ip_address and agent.status == "approved":
             agent.status = "hold"
             db.session.commit()
@@ -456,6 +613,7 @@ def handle_handshake(data):
                 {"status": "hold", "message": "IPアドレス変更: 再承認が必要です。"},
             )
         else:
+            db.session.commit()
             emit(
                 "registration_status",
                 {"status": agent.status, "message": "再接続されました。"},
@@ -463,6 +621,9 @@ def handle_handshake(data):
     # 承認済みの場合は、監視対象リストをプッシュする
     if agent.status == "approved":
         emit("server_message", {"type": "update_targets", "targets": current_targets})
+        policy = _get_latest_update_policy()
+        if _should_notify_update(agent.version, policy):
+            emit("server_message", _build_update_payload(policy))
 
 
 @socketio.on("monitoring_data", namespace="/agent")

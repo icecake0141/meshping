@@ -1,4 +1,5 @@
 // Copyright 2026 Meshping Contributors
+// SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +25,8 @@ import (
 	"math"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -73,8 +76,12 @@ type RegistrationStatus struct {
 
 // ServerMessage はサーバ側からの各種プッシュメッセージを表します。
 type ServerMessage struct {
-	Type    string   `json:"type"`
-	Targets []string `json:"targets,omitempty"`
+	Type          string   `json:"type"`
+	Targets       []string `json:"targets,omitempty"`
+	TargetVersion string   `json:"target_version,omitempty"`
+	DownloadURL   string   `json:"download_url,omitempty"`
+	Mandatory     bool     `json:"mandatory,omitempty"`
+	ReleaseNotes  string   `json:"release_notes,omitempty"`
 }
 
 // MonitoringEntry は各監視対象の結果を表現します。
@@ -151,6 +158,63 @@ func computeSLAMetrics(target string, ok bool, latency float64) (jitter, packetL
 	}
 
 	return jitter, packetLoss
+}
+
+// parseVersionParts converts a dotted version string into integer segments.
+func parseVersionParts(version string) []int {
+	parts := strings.Split(version, ".")
+	values := make([]int, 0, len(parts))
+	for _, part := range parts {
+		digits := ""
+		for _, ch := range part {
+			if ch >= '0' && ch <= '9' {
+				digits += string(ch)
+			} else {
+				break
+			}
+		}
+		if digits == "" {
+			values = append(values, 0)
+			continue
+		}
+		value, err := strconv.Atoi(digits)
+		if err != nil {
+			value = 0
+		}
+		values = append(values, value)
+	}
+	return values
+}
+
+// isVersionBehind returns true when current is behind target.
+func isVersionBehind(current, target string) bool {
+	if target == "" {
+		return false
+	}
+	if current == "" {
+		return true
+	}
+	currentParts := parseVersionParts(current)
+	targetParts := parseVersionParts(target)
+	maxLen := len(currentParts)
+	if len(targetParts) > maxLen {
+		maxLen = len(targetParts)
+	}
+	for len(currentParts) < maxLen {
+		currentParts = append(currentParts, 0)
+	}
+	for len(targetParts) < maxLen {
+		targetParts = append(targetParts, 0)
+	}
+	for i := 0; i < maxLen; i++ {
+		if currentParts[i] < targetParts[i] {
+			return true
+		}
+		if currentParts[i] > targetParts[i] {
+			return false
+		}
+	}
+	return false
 }
 
 // getPassphrase returns the agent shared secret.
@@ -324,6 +388,33 @@ func main() {
 				select {
 				case initialTargetsReceived <- true:
 				default:
+				}
+			case "agent_update":
+				if srvMsg.TargetVersion == "" {
+					log.Println("更新通知にターゲットバージョンが含まれていません")
+					continue
+				}
+				if !isVersionBehind(version, srvMsg.TargetVersion) {
+					log.Printf(
+						"更新通知受信済み: 現在バージョン %s (ターゲット %s)",
+						version,
+						srvMsg.TargetVersion,
+					)
+					continue
+				}
+				log.Printf(
+					"エージェント更新が必要です: 現在 %s → 目標 %s",
+					version,
+					srvMsg.TargetVersion,
+				)
+				if srvMsg.DownloadURL != "" {
+					log.Printf("更新用ダウンロードURL: %s", srvMsg.DownloadURL)
+				}
+				if srvMsg.ReleaseNotes != "" {
+					log.Printf("更新内容: %s", srvMsg.ReleaseNotes)
+				}
+				if srvMsg.Mandatory {
+					log.Println("必須更新が指定されています。更新後に再起動してください。")
 				}
 			default:
 				log.Println("不明なメッセージタイプ:", srvMsg.Type)
