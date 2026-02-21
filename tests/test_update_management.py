@@ -19,7 +19,7 @@
 
 """Tests for agent update policy management APIs."""
 
-# pylint: disable=import-error,redefined-outer-name
+# pylint: disable=import-error,redefined-outer-name,duplicate-code
 import pytest
 
 import server
