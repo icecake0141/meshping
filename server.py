@@ -24,7 +24,7 @@ This module implements a Flask-based server that manages monitoring agents
 and collects ping data from distributed agents across the network.
 """
 
-# pylint: disable=import-error
+# pylint: disable=import-error,too-many-lines
 import typing
 import base64
 import datetime
