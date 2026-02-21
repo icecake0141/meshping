@@ -28,70 +28,46 @@ import pytest
 import server
 
 
-@pytest.fixture(name='test_client')
-def client(tmp_path):
-    """
-    Create a Flask test client with a temporary test database.
-    
-    Args:
-        tmp_path: pytest fixture providing a temporary directory path
-        
-    Yields:
-        Flask test client configured for testing
-    """
-    server.app.config.update(
-        TESTING=True,
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path / 'test.db'}",
-        SQLALCHEMY_TRACK_MODIFICATIONS=False,
-    )
-    with server.app.app_context():
-        server.db.create_all()
-        server.current_targets = []
-        yield server.app.test_client()
-        server.db.session.remove()
-        server.db.drop_all()
-
-
-def test_update_targets_without_json_body_returns_400(test_client):
+def test_update_targets_without_json_body_returns_400(client):
     """Test that POST without JSON body returns 400 error."""
-    response = test_client.post("/admin/update_targets")
+    response = client.post("/admin/update_targets")
 
     assert response.status_code == 400
 
 
-def test_update_targets_without_targets_field_returns_400(test_client):
+def test_update_targets_without_targets_field_returns_400(client):
     """Test that POST without 'targets' field returns 400 error."""
-    response = test_client.post("/admin/update_targets", json={"name": "missing"})
+    response = client.post("/admin/update_targets", json={"name": "missing"})
 
     assert response.status_code == 400
 
 
-def test_update_targets_with_targets_returns_200_and_targets(test_client):
+def test_update_targets_with_targets_returns_200_and_targets(client):
     """Test that valid targets list returns 200 with target data."""
 
     payload = {"targets": ["10.0.0.1", "10.0.0.2"]}
 
-    response = test_client.post("/admin/update_targets", json=payload)
+    response = client.post("/admin/update_targets", json=payload)
 
     assert response.status_code == 200
     data = response.get_json()
     assert data["targets"] == payload["targets"]
 
 
-def test_update_targets_with_non_list_targets_returns_400(test_client):
+def test_update_targets_with_non_list_targets_returns_400(client):
     """Test that non-list targets value returns 400 error."""
     payload = {"targets": "not a list"}
 
-    response = test_client.post("/admin/update_targets", json=payload)
+    response = client.post("/admin/update_targets", json=payload)
 
     assert response.status_code == 400
 
 
-def test_update_targets_with_non_string_elements_returns_400(test_client):
+def test_update_targets_with_non_string_elements_returns_400(client):
     """Test that targets list with non-string elements returns 400 error."""
     payload = {"targets": ["10.0.0.1", 123, "10.0.0.3"]}
 
-    response = test_client.post("/admin/update_targets", json=payload)
+    response = client.post("/admin/update_targets", json=payload)
 
     assert response.status_code == 400
 
@@ -152,9 +128,9 @@ def test_admin_endpoint_returns_200_with_correct_token(authed_client):
     assert response.status_code == 200
 
 
-def test_admin_endpoint_accessible_without_token_when_unconfigured(test_client):
+def test_admin_endpoint_accessible_without_token_when_unconfigured(client):
     """When ADMIN_TOKEN is not set, admin endpoints must remain accessible."""
-    response = test_client.post(
+    response = client.post(
         "/admin/update_targets", json={"targets": ["10.0.0.1"]}
     )
     assert response.status_code == 200

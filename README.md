@@ -105,6 +105,7 @@ See the diagram below for an overview of the system architecture and data flow:
 - **Management Features**
   - Agent approval, rejection, and re-authentication status management
   - Centralized update of monitoring target lists with push distribution to all agents
+  - Agent update policy management with version tracking and update notifications (`/admin/update_policy`, `/admin/agent_versions`)
 
 ## Managing Monitoring Targets via Admin Dashboard
 
