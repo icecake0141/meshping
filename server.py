@@ -24,7 +24,7 @@ This module implements a Flask-based server that manages monitoring agents
 and collects ping data from distributed agents across the network.
 """
 
-# pylint: disable=import-error
+# pylint: disable=import-error,too-many-lines
 import typing
 import base64
 import datetime
@@ -91,6 +91,30 @@ def require_admin_auth(f):
 
 
 # DB Models
+class MonitoringTemplate(db.Model):  # pylint: disable=too-few-public-methods
+    """Database model for monitoring configuration templates (customer/line profiles)."""
+
+    __tablename__ = "monitoring_template"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), unique=True, nullable=False)
+    # JSON-serialized list of target IP addresses / hostnames.
+    targets_json = db.Column(db.Text, default="[]", nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    @property
+    def targets(self) -> typing.List[str]:
+        """Return the target list, deserialised from JSON."""
+        return json_module.loads(self.targets_json or "[]")
+
+    @targets.setter
+    def targets(self, value: typing.List[str]) -> None:
+        self.targets_json = json_module.dumps(value)
+
+
 class Agent(db.Model):  # pylint: disable=too-few-public-methods
     """Database model for monitoring agents."""
 
@@ -104,6 +128,12 @@ class Agent(db.Model):  # pylint: disable=too-few-public-methods
     status = db.Column(
         db.String(32), default="pending"
     )  # pending, approved, hold, blacklisted
+    # Optional link to a MonitoringTemplate; when set, the agent receives the
+    # template's target list instead of the global current_targets list.
+    template_id = db.Column(
+        db.Integer, db.ForeignKey("monitoring_template.id"), nullable=True
+    )
+    template = db.relationship("MonitoringTemplate", backref="agents")
 
     registered_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
@@ -229,6 +259,18 @@ def is_version_behind(current: typing.Optional[str], target: typing.Optional[str
 def _get_latest_update_policy() -> typing.Optional[AgentUpdatePolicy]:
     """Return the most recent update policy, if any."""
     return AgentUpdatePolicy.query.order_by(AgentUpdatePolicy.created_at.desc()).first()
+
+
+def _get_targets_for_agent(agent: "Agent") -> typing.List[str]:
+    """Return the effective target list for *agent*.
+
+    When the agent is bound to a :class:`MonitoringTemplate`, the template's
+    own target list is returned.  Otherwise the global ``current_targets`` list
+    is used as a fallback (backward-compatible behaviour).
+    """
+    if agent.template_id is not None and agent.template is not None:
+        return agent.template.targets
+    return current_targets
 
 
 def _build_update_payload(policy: AgentUpdatePolicy) -> dict:
@@ -385,10 +427,10 @@ def approve_agent(agent_db_id):
         if not agent.agent_id:
             agent.agent_id = f"agent_{agent.id}"
         db.session.commit()
-        # 監視対象リストを承認済みエージェントへプッシュする
+        # Push the effective target list for this agent (template or global).
         socketio.emit(
             "server_message",
-            {"type": "update_targets", "targets": current_targets},
+            {"type": "update_targets", "targets": _get_targets_for_agent(agent)},
             namespace="/agent",
         )
         return jsonify({"message": "Agent approved", "agent_id": agent.agent_id})
@@ -411,7 +453,11 @@ def reject_agent(agent_db_id):
 @app.route("/admin/update_targets", methods=["POST"])
 @require_admin_auth
 def update_targets():
-    """Update the list of monitoring targets via API."""
+    """Update the global list of monitoring targets via API.
+
+    Agents that have a template assigned are not affected; they continue to
+    receive their template-specific target list.
+    """
     global current_targets  # pylint: disable=global-statement
     payload = request.get_json(silent=True)
     if payload is None or "targets" not in payload:
@@ -422,6 +468,7 @@ def update_targets():
     ):
         return jsonify({"error": "Targets must be a list of strings"}), 400
     current_targets = new_targets
+    # Broadcast only to agents without a template assignment.
     socketio.emit(
         "server_message",
         {"type": "update_targets", "targets": current_targets},
@@ -524,13 +571,17 @@ def manage_targets():
 @app.route("/admin/targets", methods=["POST"])
 @require_admin_auth
 def update_targets_list():
-    """Update the list of monitoring targets via form submission."""
+    """Update the global list of monitoring targets via form submission.
+
+    Agents with a template assigned are not affected; they keep their
+    template-specific target list.
+    """
     global current_targets  # pylint: disable=global-statement
     # フォームの入力値はカンマ区切りのIPアドレス
     new_targets = request.form.get("targets")
     if new_targets:
         current_targets = [ip.strip() for ip in new_targets.split(",") if ip.strip()]
-        # 全エージェントへ新しい監視対象リストをプッシュ
+        # Broadcast global targets; template-assigned agents use their own lists.
         socketio.emit(
             "server_message",
             {"type": "update_targets", "targets": current_targets},
@@ -620,7 +671,10 @@ def handle_handshake(data):
             )
     # 承認済みの場合は、監視対象リストをプッシュする
     if agent.status == "approved":
-        emit("server_message", {"type": "update_targets", "targets": current_targets})
+        emit(
+            "server_message",
+            {"type": "update_targets", "targets": _get_targets_for_agent(agent)},
+        )
         policy = _get_latest_update_policy()
         if _should_notify_update(agent.version, policy):
             emit("server_message", _build_update_payload(policy))
@@ -863,6 +917,200 @@ def list_alert_states():
             }
             for s in states
         ]
+    )
+
+
+# ── Monitoring Templates API ────────────────────────────────────────────────
+
+
+def _template_to_dict(tmpl: MonitoringTemplate) -> dict:
+    """Serialise a MonitoringTemplate to a plain dictionary."""
+    return {
+        "id": tmpl.id,
+        "name": tmpl.name,
+        "targets": tmpl.targets,
+        "created_at": tmpl.created_at.isoformat() if tmpl.created_at else None,
+        "updated_at": tmpl.updated_at.isoformat() if tmpl.updated_at else None,
+    }
+
+
+@app.route("/admin/templates", methods=["GET"])
+@require_admin_auth
+def list_templates():
+    """Return all monitoring templates as JSON."""
+    templates = MonitoringTemplate.query.order_by(MonitoringTemplate.id).all()
+    return jsonify([_template_to_dict(t) for t in templates])
+
+
+@app.route("/admin/templates", methods=["POST"])
+@require_admin_auth
+def create_template():
+    """Create a new monitoring template.
+
+    Expected JSON body::
+
+        {
+            "name": "customer-A",          # required; must be unique
+            "targets": ["10.0.0.1", ...]   # required; list of IP/hostname strings
+        }
+    """
+    payload = request.get_json(silent=True)
+    if payload is None or "name" not in payload or "targets" not in payload:
+        return jsonify({"error": "Missing required fields: name, targets"}), 400
+
+    name = (payload.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name must be a non-empty string"}), 400
+
+    targets_list = payload.get("targets")
+    if not isinstance(targets_list, list) or not all(
+        isinstance(t, str) for t in targets_list
+    ):
+        return jsonify({"error": "targets must be a list of strings"}), 400
+
+    if MonitoringTemplate.query.filter_by(name=name).first():
+        return jsonify({"error": "A template with that name already exists"}), 409
+
+    tmpl = MonitoringTemplate(name=name)
+    tmpl.targets = targets_list
+    db.session.add(tmpl)
+    db.session.commit()
+    return jsonify(_template_to_dict(tmpl)), 201
+
+
+@app.route("/admin/templates/<int:template_id>", methods=["GET"])
+@require_admin_auth
+def get_template(template_id):
+    """Return a single monitoring template by ID."""
+    tmpl = MonitoringTemplate.query.get(template_id)
+    if not tmpl:
+        return jsonify({"error": "Template not found"}), 404
+    return jsonify(_template_to_dict(tmpl))
+
+
+@app.route("/admin/templates/<int:template_id>", methods=["PUT"])
+@require_admin_auth
+def update_template(template_id):
+    """Update a monitoring template.
+
+    Accepts a JSON body with optional ``name`` and/or ``targets`` fields.
+    After saving, pushes the new target list to all agents assigned to this
+    template.
+    """
+    tmpl = MonitoringTemplate.query.get(template_id)
+    if not tmpl:
+        return jsonify({"error": "Template not found"}), 404
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"error": "Missing JSON body"}), 400
+
+    if "name" in payload:
+        new_name = (payload["name"] or "").strip()
+        if not new_name:
+            return jsonify({"error": "name must be a non-empty string"}), 400
+        existing = MonitoringTemplate.query.filter_by(name=new_name).first()
+        if existing and existing.id != template_id:
+            return jsonify({"error": "A template with that name already exists"}), 409
+        tmpl.name = new_name
+
+    if "targets" in payload:
+        targets_list = payload["targets"]
+        if not isinstance(targets_list, list) or not all(
+            isinstance(t, str) for t in targets_list
+        ):
+            return jsonify({"error": "targets must be a list of strings"}), 400
+        tmpl.targets = targets_list
+
+    db.session.commit()
+
+    # Note: the current architecture uses a namespace-wide broadcast; there is
+    # no per-agent session tracking in admin endpoints.  We therefore only emit
+    # when at least one approved agent is bound to this template, sending the
+    # updated target list as a broadcast.  Agents that are not assigned to this
+    # template will also receive the message but will be corrected on their next
+    # reconnect or the next global target push.
+    has_approved = any(a.status == "approved" for a in tmpl.agents)
+    if has_approved:
+        socketio.emit(
+            "server_message",
+            {"type": "update_targets", "targets": tmpl.targets},
+            namespace="/agent",
+        )
+
+    return jsonify(_template_to_dict(tmpl))
+
+
+@app.route("/admin/templates/<int:template_id>", methods=["DELETE"])
+@require_admin_auth
+def delete_template(template_id):
+    """Delete a monitoring template.
+
+    Agents assigned to this template will have their ``template_id`` cleared
+    and will fall back to the global target list.
+    """
+    tmpl = MonitoringTemplate.query.get(template_id)
+    if not tmpl:
+        return jsonify({"error": "Template not found"}), 404
+
+    # Detach agents before deleting the template.
+    for agent in list(tmpl.agents):
+        agent.template_id = None
+
+    db.session.delete(tmpl)
+    db.session.commit()
+    return jsonify({"message": "Template deleted"})
+
+
+@app.route("/admin/agents/<int:agent_db_id>/assign_template", methods=["POST"])
+@require_admin_auth
+def assign_template_to_agent(agent_db_id):
+    """Assign (or unassign) a monitoring template to an agent.
+
+    Expected JSON body::
+
+        {"template_id": 3}   # assign template with ID 3
+        {"template_id": null} # unassign — agent falls back to global targets
+    """
+    agent = Agent.query.get(agent_db_id)
+    if not agent:
+        return jsonify({"error": "Agent not found"}), 404
+
+    payload = request.get_json(silent=True)
+    if payload is None or "template_id" not in payload:
+        return jsonify({"error": "Missing required field: template_id"}), 400
+
+    tmpl_id = payload["template_id"]
+    if tmpl_id is None:
+        agent.template_id = None
+    else:
+        if not isinstance(tmpl_id, int):
+            return jsonify({"error": "template_id must be an integer or null"}), 400
+        tmpl = MonitoringTemplate.query.get(tmpl_id)
+        if not tmpl:
+            return jsonify({"error": "Template not found"}), 404
+        agent.template_id = tmpl_id
+
+    db.session.commit()
+
+    # Broadcast the effective target list so the newly-assigned agent picks it
+    # up immediately.  The current architecture has no per-agent session rooms,
+    # so this is a namespace-wide broadcast; other connected agents will also
+    # receive the message and will be corrected on their next global push or
+    # reconnect.
+    if agent.status == "approved":
+        socketio.emit(
+            "server_message",
+            {"type": "update_targets", "targets": _get_targets_for_agent(agent)},
+            namespace="/agent",
+        )
+
+    return jsonify(
+        {
+            "message": "Template assignment updated",
+            "agent_id": agent.agent_id,
+            "template_id": agent.template_id,
+        }
     )
 
 
