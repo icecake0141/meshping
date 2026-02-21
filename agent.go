@@ -13,12 +13,15 @@
 // limitations under the License.
 //
 // NOTE: This file may include code that was generated or suggested by a large language model (LLM).
+// This file was created or modified with the assistance of an AI (Large Language Model).
+// Review required for correctness, security, and licensing.
 
 package main
 
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"net"
 	"os"
 	"sync"
@@ -37,6 +40,8 @@ const (
 	pingTimeout       = 3 * time.Second
 	icmpProtocolICMP  = 1
 	echoData          = "HELLO-R-U-THERE"
+	// slaWindowSize is the number of recent ping results kept per target for SLA computation.
+	slaWindowSize = 20
 )
 
 var (
@@ -45,6 +50,10 @@ var (
 	targetsMutex sync.RWMutex
 	// 初回監視対象リスト受信完了を待つためのチャネル
 	initialTargetsReceived = make(chan bool, 1)
+
+	// targetHistory keeps a rolling window of recent ping outcomes per target.
+	targetHistory      = map[string]*targetWindow{}
+	targetHistoryMutex sync.Mutex
 )
 
 // HandshakeMessage は初回接続時に送信するメッセージです。
@@ -70,10 +79,12 @@ type ServerMessage struct {
 
 // MonitoringEntry は各監視対象の結果を表現します。
 type MonitoringEntry struct {
-	Target    string  `json:"target"`
-	Timestamp string  `json:"timestamp"`
-	Result    string  `json:"result"` // "ok" または "fail"
-	Latency   float64 `json:"latency"`
+	Target     string  `json:"target"`
+	Timestamp  string  `json:"timestamp"`
+	Result     string  `json:"result"` // "ok" または "fail"
+	Latency    float64 `json:"latency"`
+	Jitter     float64 `json:"jitter"`      // mean absolute jitter in ms (rolling window)
+	PacketLoss float64 `json:"packet_loss"` // packet loss percentage (rolling window)
 }
 
 // MonitoringDataMessage は5秒毎に送信する監視データのメッセージです。
@@ -87,6 +98,59 @@ type PingResult struct {
 	Target  string
 	Ok      bool
 	Latency float64
+}
+
+// targetWindow stores a rolling window of recent ping outcomes for SLA computation.
+type targetWindow struct {
+	results   []bool    // true=ok, false=fail
+	latencies []float64 // latency (ms) per result; 0 for failures
+}
+
+// computeSLAMetrics updates the rolling window for target with the latest ping result
+// and returns jitter (mean absolute difference between consecutive successful RTTs, ms)
+// and packetLoss (percentage of failures in the window).
+func computeSLAMetrics(target string, ok bool, latency float64) (jitter, packetLoss float64) {
+	targetHistoryMutex.Lock()
+	defer targetHistoryMutex.Unlock()
+
+	w, exists := targetHistory[target]
+	if !exists {
+		w = &targetWindow{}
+		targetHistory[target] = w
+	}
+
+	w.results = append(w.results, ok)
+	w.latencies = append(w.latencies, latency)
+	if len(w.results) > slaWindowSize {
+		w.results = w.results[1:]
+		w.latencies = w.latencies[1:]
+	}
+
+	// Packet loss: fraction of failures * 100.
+	failed := 0
+	for _, r := range w.results {
+		if !r {
+			failed++
+		}
+	}
+	packetLoss = float64(failed) / float64(len(w.results)) * 100.0
+
+	// Jitter: mean absolute difference between consecutive successful RTTs.
+	var successLatencies []float64
+	for i, r := range w.results {
+		if r {
+			successLatencies = append(successLatencies, w.latencies[i])
+		}
+	}
+	if len(successLatencies) >= 2 {
+		var sumDiff float64
+		for i := 1; i < len(successLatencies); i++ {
+			sumDiff += math.Abs(successLatencies[i] - successLatencies[i-1])
+		}
+		jitter = sumDiff / float64(len(successLatencies)-1)
+	}
+
+	return jitter, packetLoss
 }
 
 // getPassphrase returns the agent shared secret.
@@ -296,6 +360,7 @@ func main() {
 				entry.Result = "ok"
 				entry.Latency = res.Latency
 			}
+			entry.Jitter, entry.PacketLoss = computeSLAMetrics(res.Target, res.Ok, res.Latency)
 			entries = append(entries, entry)
 		}
 		message := MonitoringDataMessage{

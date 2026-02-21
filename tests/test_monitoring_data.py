@@ -13,6 +13,8 @@
 # limitations under the License.
 #
 # NOTE: This file may include code that was generated or suggested by a large language model (LLM).
+# This file was created or modified with the assistance of an AI (Large Language Model).
+# Review required for correctness, security, and licensing.
 
 """Integration-style tests for monitoring data retrieval."""
 
@@ -76,3 +78,33 @@ def test_get_monitoring_data_returns_recent_entries_from_db(
     data = response.get_json()
     assert len(data) == 1
     assert data[0]["latency"] == 12.3
+
+
+def test_get_monitoring_data_returns_jitter_and_packet_loss(
+    client,
+):  # pylint: disable=redefined-outer-name
+    """Ensure monitoring endpoint returns jitter and packet_loss fields."""
+    now = datetime.datetime.utcnow()
+    ts = now - datetime.timedelta(minutes=5)
+
+    with server.app.app_context():
+        server.db.session.add(
+            server.MonitoringData(
+                agent_id="agent-2",
+                target="1.1.1.1",
+                timestamp=ts,
+                result="ok",
+                latency=20.0,
+                jitter=2.5,
+                packet_loss=10.0,
+            )
+        )
+        server.db.session.commit()
+
+    response = client.get("/monitoring/agent-2/1.1.1.1")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert len(data) == 1
+    assert data[0]["jitter"] == 2.5
+    assert data[0]["packet_loss"] == 10.0

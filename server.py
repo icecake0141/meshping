@@ -13,6 +13,8 @@
 # limitations under the License.
 #
 # NOTE: This file may include code that was generated or suggested by a large language model (LLM).
+# This file was created or modified with the assistance of an AI (Large Language Model).
+# Review required for correctness, security, and licensing.
 
 """
 Meshping server application for monitoring network connectivity.
@@ -114,6 +116,8 @@ class MonitoringData(db.Model):  # pylint: disable=too-few-public-methods
     timestamp = db.Column(db.DateTime)
     result = db.Column(db.String(16))  # "ok" または "fail"
     latency = db.Column(db.Float)  # RTT（成功時） or 0
+    jitter = db.Column(db.Float, default=0.0)  # mean absolute jitter in ms (rolling window)
+    packet_loss = db.Column(db.Float, default=0.0)  # packet loss percentage (rolling window)
 
 
 class AlertRule(db.Model):  # pylint: disable=too-few-public-methods
@@ -463,6 +467,8 @@ def handle_monitoring_data(data):
             timestamp=ts,
             result=entry["result"],
             latency=entry.get("latency", 0),
+            jitter=entry.get("jitter", 0.0),
+            packet_loss=entry.get("packet_loss", 0.0),
         )
         db.session.add(mdata)
         # キャッシュ更新（直近1時間分保持）
@@ -502,6 +508,8 @@ def get_monitoring_data(agent_id, target):
         {
             "timestamp": d.timestamp.isoformat(),
             "latency": d.latency if d.result == "ok" else 0,
+            "jitter": d.jitter or 0.0,
+            "packet_loss": d.packet_loss or 0.0,
         }
         for d in mem_data
     ]
