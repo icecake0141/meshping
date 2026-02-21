@@ -50,6 +50,7 @@
 - [x] 管理承認/拒否
 - [x] 監視対象リスト push
 - [x] 監視データ保存 + 1時間キャッシュ
+- [x] アラート・エスカレーション（AlertRule / AlertState / evaluate_alert / webhook通知）
 - [ ] ユーザ管理
 - [ ] リアルタイム監視UI
 - [ ] ホバーUI

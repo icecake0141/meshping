@@ -107,6 +107,70 @@ See the diagram below for an overview of the system architecture and data flow:
   - Centralized update of monitoring target lists with push distribution to all agents
   - Agent update policy management with version tracking and update notifications (`/admin/update_policy`, `/admin/agent_versions`)
 
+- **Alerting & Escalation**
+  - Configure per-target alert rules with consecutive-failure thresholds and optional latency thresholds (`/admin/alert_rules`)
+  - Wildcard rules (`target="*"`) apply to all monitored targets
+  - Webhook notifications (HTTP POST JSON) on alert and recovery events
+  - Per-rule webhook URL or global `ALERT_WEBHOOK_URL` environment variable
+  - Real-time alert state visibility via `/admin/alert_states`
+
+## Alerting & Escalation
+
+Meshping can fire webhook notifications when monitored targets exceed configured failure thresholds.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `ALERT_WEBHOOK_URL` | *(empty)* | Global webhook URL for alert/recovery notifications |
+
+### Alert Rule API
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/admin/alert_rules` | List all alert rules |
+| `POST` | `/admin/alert_rules` | Create a new alert rule |
+| `DELETE` | `/admin/alert_rules/<id>` | Delete an alert rule |
+| `GET` | `/admin/alert_states` | View current alert state per agent+target |
+
+**Create alert rule (example):**
+```json
+{
+  "target": "8.8.8.8",
+  "consecutive_failures": 3,
+  "latency_threshold_ms": 200,
+  "webhook_url": "https://hooks.example.com/alert"
+}
+```
+
+- `target`: IP address to match, or `"*"` to match all targets (required)
+- `consecutive_failures`: number of consecutive failures before an alert fires (default: 3)
+- `latency_threshold_ms`: latency ceiling in ms; `0` disables latency-based alerting (default: 0)
+- `webhook_url`: per-rule override for the global `ALERT_WEBHOOK_URL`
+
+### Webhook Payload
+
+**Alert event:**
+```json
+{
+  "event": "alert",
+  "agent_id": "agent-uuid",
+  "target": "8.8.8.8",
+  "consecutive_failures": 3,
+  "timestamp": "2026-02-21T05:00:00"
+}
+```
+
+**Recovery event:**
+```json
+{
+  "event": "recovery",
+  "agent_id": "agent-uuid",
+  "target": "8.8.8.8",
+  "timestamp": "2026-02-21T05:01:00"
+}
+```
+
 ## Managing Monitoring Targets via Admin Dashboard
 
 You can edit, add, and delete monitoring target IP addresses from the admin dashboard.
