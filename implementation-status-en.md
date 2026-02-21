@@ -50,6 +50,7 @@
 - [x] Admin approve / reject
 - [x] Target list push
 - [x] Monitoring data storage + 1-hour cache
+- [x] Alerting & escalation (AlertRule / AlertState / evaluate_alert / webhook notifications)
 - [ ] User management
 - [ ] Real-time monitoring UI
 - [ ] Hover UI
