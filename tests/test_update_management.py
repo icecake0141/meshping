@@ -19,27 +19,8 @@
 
 """Tests for agent update policy management APIs."""
 
-# pylint: disable=import-error,redefined-outer-name,duplicate-code
-import pytest
-
+# pylint: disable=import-error,redefined-outer-name
 import server
-
-
-@pytest.fixture()
-def client(tmp_path):
-    """Flask test client with isolated database for update management."""
-    server.app.config.update(
-        TESTING=True,
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path / 'update_test.db'}",
-        SQLALCHEMY_TRACK_MODIFICATIONS=False,
-    )
-    with server.app.app_context():
-        server.db.create_all()
-        server.current_targets = []
-        server.recent_cache.clear()
-        yield server.app.test_client()
-        server.db.session.remove()
-        server.db.drop_all()
 
 
 def test_get_update_policy_returns_empty_payload(client):

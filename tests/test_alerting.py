@@ -26,29 +26,7 @@ Tests cover:
 """
 
 # pylint: disable=import-error,redefined-outer-name
-import pytest
-
 import server
-
-
-# ── Fixtures ─────────────────────────────────────────────────────────────────
-
-
-@pytest.fixture()
-def client(tmp_path):
-    """Flask test client with isolated in-memory database."""
-    server.app.config.update(
-        TESTING=True,
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path / 'alert_test.db'}",
-        SQLALCHEMY_TRACK_MODIFICATIONS=False,
-    )
-    with server.app.app_context():
-        server.db.create_all()
-        server.current_targets = []
-        server.recent_cache.clear()
-        yield server.app.test_client()
-        server.db.session.remove()
-        server.db.drop_all()
 
 
 # ── AlertRule API tests ───────────────────────────────────────────────────────
