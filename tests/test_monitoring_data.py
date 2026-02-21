@@ -38,6 +38,7 @@ def client(tmp_path):
         server.db.create_all()
         server.current_targets = []
         server.recent_cache.clear()
+        server._last_purge_time = None  # pylint: disable=protected-access
         yield server.app.test_client()
         server.db.session.remove()
         server.db.drop_all()
@@ -108,3 +109,131 @@ def test_get_monitoring_data_returns_jitter_and_packet_loss(
     assert len(data) == 1
     assert data[0]["jitter"] == 2.5
     assert data[0]["packet_loss"] == 10.0
+
+
+# ── Data retention / purge tests ─────────────────────────────────────────────
+
+
+def test_purge_old_monitoring_data_removes_expired_rows(
+    client,
+):  # pylint: disable=redefined-outer-name,unused-argument
+    """purge_old_monitoring_data() must delete rows outside the retention window."""
+    now = datetime.datetime.utcnow()
+    recent = now - datetime.timedelta(hours=1)
+    expired = now - datetime.timedelta(hours=25)
+
+    with server.app.app_context():
+        server.db.session.add(
+            server.MonitoringData(
+                agent_id="agent-purge",
+                target="192.0.2.1",
+                timestamp=recent,
+                result="ok",
+                latency=5.0,
+            )
+        )
+        server.db.session.add(
+            server.MonitoringData(
+                agent_id="agent-purge",
+                target="192.0.2.1",
+                timestamp=expired,
+                result="ok",
+                latency=99.0,
+            )
+        )
+        server.db.session.commit()
+
+        deleted = server.purge_old_monitoring_data()
+        remaining = server.MonitoringData.query.filter_by(agent_id="agent-purge").count()
+
+    assert deleted == 1
+    assert remaining == 1
+
+
+def test_purge_old_monitoring_data_keeps_all_rows_within_window(
+    client,
+):  # pylint: disable=redefined-outer-name,unused-argument
+    """purge_old_monitoring_data() must keep all rows inside the retention window."""
+    now = datetime.datetime.utcnow()
+
+    with server.app.app_context():
+        for offset_h in [1, 12, 23]:
+            server.db.session.add(
+                server.MonitoringData(
+                    agent_id="agent-keep",
+                    target="192.0.2.2",
+                    timestamp=now - datetime.timedelta(hours=offset_h),
+                    result="ok",
+                    latency=10.0,
+                )
+            )
+        server.db.session.commit()
+
+        deleted = server.purge_old_monitoring_data()
+        remaining = server.MonitoringData.query.filter_by(agent_id="agent-keep").count()
+
+    assert deleted == 0
+    assert remaining == 3
+
+
+# ── Analytics endpoint tests ──────────────────────────────────────────────────
+
+
+def test_get_monitoring_analytics_returns_hourly_buckets(
+    client,
+):  # pylint: disable=redefined-outer-name
+    """Analytics endpoint must return one bucket per hour with aggregated stats."""
+    now = datetime.datetime.utcnow().replace(minute=30, second=0, microsecond=0)
+    hour_bucket = now.replace(minute=0)
+
+    with server.app.app_context():
+        for latency in [10.0, 20.0, 30.0]:
+            server.db.session.add(
+                server.MonitoringData(
+                    agent_id="agent-ana",
+                    target="10.0.0.1",
+                    timestamp=now,
+                    result="ok",
+                    latency=latency,
+                    jitter=1.0,
+                    packet_loss=0.0,
+                )
+            )
+        server.db.session.commit()
+
+    response = client.get("/monitoring/agent-ana/10.0.0.1/analytics")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert len(data) == 1
+    bucket = data[0]
+    assert bucket["hour"] == hour_bucket.isoformat()
+    assert bucket["total_samples"] == 3
+    assert bucket["success_count"] == 3
+    assert abs(bucket["avg_latency"] - 20.0) < 1e-6
+
+
+def test_get_monitoring_analytics_excludes_expired_rows(
+    client,
+):  # pylint: disable=redefined-outer-name
+    """Analytics endpoint must not return data outside the retention window."""
+    now = datetime.datetime.utcnow()
+    expired = now - datetime.timedelta(hours=25)
+
+    with server.app.app_context():
+        server.db.session.add(
+            server.MonitoringData(
+                agent_id="agent-exp",
+                target="10.0.0.2",
+                timestamp=expired,
+                result="ok",
+                latency=50.0,
+            )
+        )
+        server.db.session.commit()
+
+    response = client.get("/monitoring/agent-exp/10.0.0.2/analytics")
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data == []

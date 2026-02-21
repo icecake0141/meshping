@@ -54,7 +54,7 @@
 - [ ] リアルタイム監視UI
 - [ ] ホバーUI
 - [ ] パスフレーズ暗号化/登録画面
-- [ ] 24時間リテンション
+- [x] 24時間リテンション（RETENTION_HOURS設定可、purge_old_monitoring_data + analytics endpoint実装済み）
 - [ ] TLS (agent側 wss 対応)
 
 ### Agent

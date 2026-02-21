@@ -136,19 +136,19 @@ Meshping is a network monitoring system consisting of a management server (`serv
 **Current State:** API endpoint exists (`/monitoring/<agent_id>/<target>`) to retrieve data, but no frontend visualization
 
 ### 4. Data Retention Policy
-**Status:** ⚠️ Partially Implemented  
+**Status:** ✅ Implemented  
 **Specification:** `specs.txt` (lines 30-34)
 
-**Missing Features:**
-- Automatic cleanup of data older than 24 hours (specs.txt states this as current requirement)
-- Configurable retention periods
-- Database maintenance tasks
+**Implemented Features:**
+- `purge_old_monitoring_data()` deletes `MonitoringData` rows older than `RETENTION_HOURS` (default 24 h)
+- Called automatically on every batch of incoming monitoring data
+- `RETENTION_HOURS` env variable makes the retention period configurable for future expansion
+- `GET /monitoring/<agent_id>/<target>/analytics` returns hourly-aggregated statistics (avg RTT, jitter, packet loss, sample counts) for the full retention window
 
-**Current State:** 
+**Previous State:**
 - 1-hour cache implemented and working (old data automatically removed from cache)
-- Data is written to SQLite but never deleted
-- No 24-hour retention policy enforcement (database will grow indefinitely)
-- Specification describes intended behavior as 24-hour retention, not confirmed as implemented
+- Data was written to SQLite but never deleted
+- No 24-hour retention policy enforcement (database would grow indefinitely)
 
 ### 5. Agent Local Buffer Details
 **Status:** ⚠️ Partially Implemented  
@@ -203,7 +203,7 @@ Meshping is a network monitoring system consisting of a management server (`serv
 | **Agent Management** | 2 | 0 | 1 (user mgmt) | 3 |
 | **Communication** | 2 | 0 | 0 | 2 |
 | **Monitoring** | 2 | 1 (buffering) | 0 | 3 |
-| **Data Storage** | 2 | 1 (retention) | 0 | 3 |
+| **Data Storage** | 3 | 0 (retention) | 0 | 3 |
 | **Visualization** | 1 | 0 | 2 (real-time, graphs) | 3 |
 | **Security** | 1 (TLS*) | 0 | 2 (encryption, user auth) | 3 |
 

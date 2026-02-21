@@ -53,6 +53,9 @@ AGENT_SECRET = os.environ.get("AGENT_SECRET", "")
 # Default webhook URL for alert notifications.  Set ALERT_WEBHOOK_URL env var to enable.
 ALERT_WEBHOOK_URL = os.environ.get("ALERT_WEBHOOK_URL", "")
 
+# Data retention period in hours.  Set RETENTION_HOURS env var to override (default 24).
+RETENTION_HOURS = int(os.environ.get("RETENTION_HOURS", "24"))
+
 db = SQLAlchemy(app)
 socketio = SocketIO(app)
 
@@ -151,6 +154,30 @@ class AlertState(db.Model):  # pylint: disable=too-few-public-methods
 
 # メモリ上のキャッシュ（直近1時間分のデータ保持）
 recent_cache = {}  # { agent_id: [MonitoringData, ...] }
+
+# Timestamp of the last successful purge run; used to throttle DB cleanup.
+_last_purge_time: typing.Optional[datetime.datetime] = None  # pylint: disable=invalid-name
+# Minimum interval between purge runs (1 hour by default).
+_PURGE_INTERVAL = datetime.timedelta(hours=1)
+
+
+def purge_old_monitoring_data() -> int:
+    """Delete MonitoringData rows older than RETENTION_HOURS.
+
+    Returns the number of rows deleted.  Runs at most once per ``_PURGE_INTERVAL``
+    to avoid excessive database load on every incoming data batch.
+    """
+    global _last_purge_time  # pylint: disable=global-statement
+    now = datetime.datetime.utcnow()
+    if _last_purge_time is not None and (now - _last_purge_time) < _PURGE_INTERVAL:
+        return 0
+    _last_purge_time = now
+    cutoff = now - datetime.timedelta(hours=RETENTION_HOURS)
+    deleted = MonitoringData.query.filter(MonitoringData.timestamp < cutoff).delete()
+    db.session.commit()
+    if deleted:
+        logging.info("Purged %d monitoring rows older than %dh", deleted, RETENTION_HOURS)
+    return deleted
 
 
 def _send_webhook(url: str, payload: dict) -> None:
@@ -487,6 +514,7 @@ def handle_monitoring_data(data):
             entry.get("latency", 0),
         )
     db.session.commit()
+    purge_old_monitoring_data()
     emit("data_received", {"message": "監視データ保存完了"})
 
 
@@ -514,6 +542,57 @@ def get_monitoring_data(agent_id, target):
         for d in mem_data
     ]
     return jsonify(response)
+
+
+@app.route("/monitoring/<agent_id>/<target>/analytics")
+def get_monitoring_analytics(agent_id, target):
+    """Return hourly-aggregated monitoring statistics for the retention window.
+
+    Each bucket covers one calendar hour and includes:
+    - ``hour``: ISO-8601 timestamp of the bucket start (UTC)
+    - ``avg_latency``: average RTT (ms) across successful pings; null if no successes
+    - ``avg_jitter``: average jitter (ms) across all samples
+    - ``avg_packet_loss``: average packet-loss (%) across all samples
+    - ``total_samples``: total number of monitoring entries in the bucket
+    - ``success_count``: number of entries where result == "ok"
+    """
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=RETENTION_HOURS)
+    rows = MonitoringData.query.filter(
+        MonitoringData.agent_id == agent_id,
+        MonitoringData.target == target,
+        MonitoringData.timestamp >= cutoff,
+    ).order_by(MonitoringData.timestamp).all()
+
+    # Group rows into hourly buckets keyed by (year, month, day, hour).
+    buckets: dict = {}
+    for row in rows:
+        bucket_key = row.timestamp.replace(minute=0, second=0, microsecond=0)
+        if bucket_key not in buckets:
+            buckets[bucket_key] = {"latencies": [], "jitters": [], "losses": [], "total": 0}
+        b = buckets[bucket_key]
+        b["total"] += 1
+        if row.result == "ok":
+            b["latencies"].append(row.latency or 0.0)
+        b["jitters"].append(row.jitter or 0.0)
+        b["losses"].append(row.packet_loss or 0.0)
+
+    result = []
+    for hour_ts in sorted(buckets.keys()):
+        b = buckets[hour_ts]
+        avg_latency = (sum(b["latencies"]) / len(b["latencies"])) if b["latencies"] else None
+        avg_jitter = (sum(b["jitters"]) / len(b["jitters"])) if b["jitters"] else None
+        avg_loss = (sum(b["losses"]) / len(b["losses"])) if b["losses"] else None
+        result.append(
+            {
+                "hour": hour_ts.isoformat(),
+                "avg_latency": avg_latency,
+                "avg_jitter": avg_jitter,
+                "avg_packet_loss": avg_loss,
+                "total_samples": b["total"],
+                "success_count": len(b["latencies"]),
+            }
+        )
+    return jsonify(result)
 
 
 # ── Alert Rules Management API ──────────────────────────────────────────────
