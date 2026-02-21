@@ -30,7 +30,7 @@ def client(tmp_path):
     """Flask test client with isolated in-memory database."""
     server.app.config.update(
         TESTING=True,
-        SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path / 'alert_test.db'}",
+        SQLALCHEMY_DATABASE_URI=f"sqlite:///{tmp_path / 'test.db'}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
     with server.app.app_context():
